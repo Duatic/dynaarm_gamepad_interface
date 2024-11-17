@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(gamepad_controller)
+project(gamepad_interface)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -20,8 +20,12 @@ find_package(std_msgs REQUIRED)
 
 include_directories(include)
 
-add_executable(gamepad_controller_node src/gamepad_controller_node.cpp)
-ament_target_dependencies(gamepad_controller_node
+add_executable(gamepad_node 
+  src/gamepad_node.cpp
+  src/gamepad_handler.cpp
+  src/gamepad_receiver.cpp)
+
+ament_target_dependencies(gamepad_node
   rclcpp
   sensor_msgs
   controller_manager_msgs
@@ -31,8 +35,13 @@ ament_target_dependencies(gamepad_controller_node
 )
 
 install(
-  TARGETS gamepad_controller_node
+  TARGETS gamepad_node
   DESTINATION lib/${PROJECT_NAME}
+)
+
+install(
+  DIRECTORY config launch
+  DESTINATION share/${PROJECT_NAME}/
 )
 
 install(
