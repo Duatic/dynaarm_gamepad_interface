@@ -1,8 +1,16 @@
-button_mapping:
-  deadman_switch: 9       # LeftShoulder (LB)
-  stop_motion: 10         # RightShoulder (RB)
-  close_gripper: 11       # A
-  open_gripper: 12        # B
-  switch_controller: 13   # X
-  move_home: 5            # Start
-  emergency_stop: [5, 6]  # Start + Back
+gamepad_receiver_node:
+  ros__parameters:
+    button_mapping:
+      deadman_switch: 9       # LeftShoulder (LB)
+      stop_motion: 10         # RightShoulder (RB)
+      close_gripper: 11       # A
+      open_gripper: 12        # B
+      switch_controller: 13   # X
+      move_home: 5            # Start
+      emergency_stop: [5, 6]  # Start + Back
+
+gamepad_handler_node:
+  ros__parameters:
+    controller_whitelist:
+      - gravity_compensation_controller
+      - joint_trajectory_controller

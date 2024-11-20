@@ -2,14 +2,15 @@
 
 namespace gamepad_interface
 {
-    GamepadReceiver::GamepadReceiver(const std::string &node_name)
-        : Node(node_name)
+    GamepadReceiver::GamepadReceiver()
+        : Node("gamepad_receiver_node")
     {
         // Load button mappings from parameters
         loadButtonMappings();
 
-        joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
-            "/joy", 10, std::bind(&GamepadReceiver::joyCallback, this, std::placeholders::_1));
+        joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>("/joy", 10, std::bind(&GamepadReceiver::joyCallback, this, std::placeholders::_1));
+
+        RCLCPP_INFO(this->get_logger(), "GamepadReceiver initialized.");
     }
 
     void GamepadReceiver::setInputCallback(InputCallback callback)
@@ -30,10 +31,17 @@ namespace gamepad_interface
         button_mapping_.open_gripper = this->declare_parameter<int>("button_mapping.open_gripper", 12);
         button_mapping_.switch_controller = this->declare_parameter<int>("button_mapping.switch_controller", 13);
         button_mapping_.move_home = this->declare_parameter<int>("button_mapping.move_home", 5);
-
-        auto emergency_stop_param = this->declare_parameter<std::vector<long>>("button_mapping.emergency_stop", {5, 6});
+        auto emergency_stop_param = this->declare_parameter<std::vector<int>>("button_mapping.emergency_stop", {5, 6});
         button_mapping_.emergency_stop = std::vector<int>(emergency_stop_param.begin(), emergency_stop_param.end());
 
+        // Log the loaded button mappings
+        RCLCPP_DEBUG(this->get_logger(), "  Deadman Switch: %d", button_mapping_.deadman_switch);
+        RCLCPP_DEBUG(this->get_logger(), "  Stop Motion: %d", button_mapping_.stop_motion);
+        RCLCPP_DEBUG(this->get_logger(), "  Close Gripper: %d", button_mapping_.close_gripper);
+        RCLCPP_DEBUG(this->get_logger(), "  Open Gripper: %d", button_mapping_.open_gripper);
+        RCLCPP_DEBUG(this->get_logger(), "  Switch Controller: %d", button_mapping_.switch_controller);
+        RCLCPP_DEBUG(this->get_logger(), "  Move Home: %d", button_mapping_.move_home);
+        RCLCPP_DEBUG(this->get_logger(), "  Emergency Stop: [%s]", rcpputils::join(button_mapping_.emergency_stop, ", ").c_str());
         RCLCPP_INFO(this->get_logger(), "Button mappings loaded successfully.");
     }
 

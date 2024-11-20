@@ -27,7 +27,7 @@ namespace gamepad_interface
     class GamepadReceiver : public rclcpp::Node
     {
     public:
-        GamepadReceiver(const std::string &node_name);
+        explicit GamepadReceiver();
 
         using InputCallback = std::function<void(const GamepadInput &, const ButtonMapping &)>;
         void setInputCallback(InputCallback callback);

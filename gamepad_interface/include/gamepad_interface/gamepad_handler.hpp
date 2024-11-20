@@ -1,6 +1,9 @@
 #pragma once
 
 #include <rclcpp/rclcpp.hpp>
+
+#include <controller_manager_msgs/srv/list_controllers.hpp>
+#include <controller_manager_msgs/srv/switch_controller.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <trajectory_msgs/msg/joint_trajectory.hpp>
 #include <trajectory_msgs/msg/joint_trajectory_point.hpp>
@@ -9,21 +12,24 @@
 
 namespace gamepad_interface
 {
-    class GamepadHandler
+    class GamepadHandler : public rclcpp::Node
     {
     public:
-        GamepadHandler(const std::shared_ptr<rclcpp::Node> &node, const ButtonMapping &button_mapping);
+        explicit GamepadHandler();
 
         void handleInput(const GamepadInput &input, const ButtonMapping &button_mapping);
 
     private:
-        void moveToHome();
-        void controlGripper(bool close);
-        void emergencyStop();
+        void switchController(const std::string &start_controller, const std::string &stop_controller);
+        void listAvailableControllers();
 
-        rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr gripper_pub_;
-        rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_pub_;
+        rclcpp::Client<controller_manager_msgs::srv::SwitchController>::SharedPtr switch_controller_client_;
+        rclcpp::Client<controller_manager_msgs::srv::ListControllers>::SharedPtr list_controllers_client_;
+
         bool motion_enabled_;
         ButtonMapping button_mapping_;
+
+        std::vector<std::string> whitelisted_controllers_;
+        std::vector<std::string> available_controllers_;
     };
 }
