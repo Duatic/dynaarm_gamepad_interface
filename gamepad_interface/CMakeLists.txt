@@ -17,14 +17,36 @@ find_package(controller_manager_msgs REQUIRED)
 find_package(trajectory_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+find_package(pinocchio REQUIRED)
+find_package(Eigen3 REQUIRED)
 
-include_directories(include)
+add_library(kinematic_utils src/kinematic_utils.cpp)
+target_include_directories(kinematic_utils
+    PUBLIC
+    include
+    ${EIGEN3_INCLUDE_DIRS}  # Add Eigen3 include directories
+)
+ament_target_dependencies(kinematic_utils 
+  rclcpp
+  tf2
+  tf2_ros
+  geometry_msgs
+  sensor_msgs
+  pinocchio
+  Eigen3)
 
 add_executable(gamepad_node 
   src/gamepad_node.cpp
   src/gamepad_handler.cpp
   src/gamepad_receiver.cpp)
-
+target_include_directories(gamepad_node
+  PUBLIC
+  include
+  ${EIGEN3_INCLUDE_DIRS}  # Add Eigen3 include directories
+)
+target_link_libraries(gamepad_node kinematic_utils)
 ament_target_dependencies(gamepad_node
   rclcpp
   sensor_msgs
@@ -32,6 +54,10 @@ ament_target_dependencies(gamepad_node
   trajectory_msgs
   geometry_msgs
   std_msgs
+  tf2
+  tf2_ros  
+  pinocchio
+  Eigen3
 )
 
 install(

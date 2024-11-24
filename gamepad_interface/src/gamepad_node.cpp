@@ -1,3 +1,5 @@
+#pragma GCC diagnostic ignored "-Wdeprecated-enum-enum-conversion"
+
 #include "gamepad_interface/gamepad_receiver.hpp"
 #include "gamepad_interface/gamepad_handler.hpp"
 #include <rclcpp/rclcpp.hpp>
@@ -8,6 +10,7 @@ int main(int argc, char **argv)
 
     auto receiver = std::make_shared<gamepad_interface::GamepadReceiver>();
     auto handler = std::make_shared<gamepad_interface::GamepadHandler>();
+    handler->init();
 
     // Set the input callback to pass data from receiver to handler
     receiver->setInputCallback(

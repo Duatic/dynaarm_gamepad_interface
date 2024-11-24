@@ -9,15 +9,23 @@ namespace gamepad_interface
         : Node("gamepad_handler_node"),
           motion_enabled_(false)
     {
+        cartesian_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/cartesian_motion_controller/target_frame", 10);
+
+        switch_controller_client_ = this->create_client<controller_manager_msgs::srv::SwitchController>("/controller_manager/switch_controller");
+        list_controllers_client_ = this->create_client<controller_manager_msgs::srv::ListControllers>("/controller_manager/list_controllers");
+    }
+
+    void GamepadHandler::init()
+    {
         // Declare and load the whitelist parameter
         this->declare_parameter<std::vector<std::string>>("controller_whitelist", {}, rcl_interfaces::msg::ParameterDescriptor{});
         this->get_parameter("controller_whitelist", whitelisted_controllers_);
 
-        switch_controller_client_ = this->create_client<controller_manager_msgs::srv::SwitchController>("/controller_manager/switch_controller");
-        list_controllers_client_ = this->create_client<controller_manager_msgs::srv::ListControllers>("/controller_manager/list_controllers");
+        // Initialize KinematicUtils
+        kinematic_utils = std::make_shared<KinematicUtils>(this->shared_from_this(), "base", "END_EFFECTOR");
+        RCLCPP_INFO(this->get_logger(), "KinematicUtils initialized.");
 
         listAvailableControllers();
-
         RCLCPP_INFO(this->get_logger(), "GamepadHandler initialized.");
     }
 
@@ -64,6 +72,30 @@ namespace gamepad_interface
         }
     }
 
+    void GamepadHandler::publishCartesianTarget(const GamepadInput &input)
+    {
+        if (input.axes.empty())
+        {
+            RCLCPP_WARN(this->get_logger(), "No joystick input received.");
+            return;
+        }
+
+        // Fetch the current pose using KinematicUtils
+        geometry_msgs::msg::PoseStamped target_pose_stamped = kinematic_utils->getCurrentPose();
+
+        // Scale joystick input to Cartesian displacement
+        double displacement_scale = 0.01;                                          // Adjust for desired sensitivity
+        target_pose_stamped.pose.position.x += input.axes[0] * displacement_scale; // X-axis (left/right)
+        target_pose_stamped.pose.position.y += input.axes[1] * displacement_scale; // Y-axis (forward/backward)
+        target_pose_stamped.pose.position.z += input.axes[2] * displacement_scale; // Z-axis (up/down)
+
+        // Publish the message
+        cartesian_pose_publisher_->publish(target_pose_stamped);
+
+        RCLCPP_INFO(this->get_logger(), "Published Cartesian target: position(x: %f, y: %f, z: %f)",
+                    target_pose_stamped.pose.position.x, target_pose_stamped.pose.position.y, target_pose_stamped.pose.position.z);
+    }
+
     void GamepadHandler::switchController(const std::string &start_controller, const std::string &stop_controller)
     {
         if (!switch_controller_client_->wait_for_service(std::chrono::seconds(1)))
@@ -99,6 +131,8 @@ namespace gamepad_interface
 
     void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping)
     {
+        motion_enabled_ = false;
+
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.deadman_switch) &&
             input.buttons[button_mapping.deadman_switch] == 1)
         {
@@ -119,6 +153,11 @@ namespace gamepad_interface
                 RCLCPP_INFO(this->get_logger(),
                             "Switched to controller: %s", available_controllers_[current_index].c_str());
             }
+        }
+
+        if (motion_enabled_)
+        {
+            publishCartesianTarget(input);
         }
     }
 }

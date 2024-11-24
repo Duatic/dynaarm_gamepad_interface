@@ -14,3 +14,4 @@ gamepad_handler_node:
     controller_whitelist:
       - gravity_compensation_controller
       - joint_trajectory_controller
+      - cartesian_velocity_controller
