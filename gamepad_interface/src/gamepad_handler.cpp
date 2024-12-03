@@ -92,7 +92,7 @@ namespace gamepad_interface
         // Publish the message
         cartesian_pose_publisher_->publish(target_pose_stamped);
 
-        RCLCPP_INFO(this->get_logger(), "Published Cartesian target: position(x: %f, y: %f, z: %f)",
+        RCLCPP_DEBUG(this->get_logger(), "Published Cartesian target: position(x: %f, y: %f, z: %f)",
                     target_pose_stamped.pose.position.x, target_pose_stamped.pose.position.y, target_pose_stamped.pose.position.z);
     }
 
@@ -130,14 +130,14 @@ namespace gamepad_interface
     }
 
     void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping)
-    {
+    {        
         motion_enabled_ = false;
 
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.deadman_switch) &&
             input.buttons[button_mapping.deadman_switch] == 1)
         {
             motion_enabled_ = true;
-            RCLCPP_INFO(this->get_logger(), "Motion enabled.");
+            RCLCPP_DEBUG(this->get_logger(), "Motion enabled.");
         }
 
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.switch_controller) &&
@@ -155,9 +155,23 @@ namespace gamepad_interface
             }
         }
 
-        if (motion_enabled_)
+        if (motion_enabled_ == false)
         {
-            publishCartesianTarget(input);
+            return;
         }
+
+        if (input.buttons.size() > static_cast<std::size_t>(button_mapping.move_home) &&
+            input.buttons[button_mapping.move_home] == 1)
+        {
+            RCLCPP_DEBUG(this->get_logger(), "Moving to the home position.");
+            // 1. Activate the joint position controller
+            // 2. Set the velocity to really slow
+            // 3. Move the robot into its home position
+
+            return;
+        }
+
+        // This is only done when the correct controller is selected
+        //publishCartesianTarget(input);
     }
 }

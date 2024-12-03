@@ -1,17 +1,41 @@
+# AXES
+# 0 = Left Stick X
+# 1 = Left Stick Y
+# 2 = Right Stick X
+# 3 = Right Stick Y
+# 4 = Left Trigger
+# 5 = Right Trigger
+
+# BUTTONS
+# 0   = DPad Up
+# 1   = DPad Down
+# 2   = DPad Left,
+# 3   = DPad Right,
+# 4   = Face Top,
+# 5   = Face Bottom,
+# 6   = Face Left,
+# 7   = Face Right,
+# 8   = Left Shoulder,
+# 9   = Right Shoulder,
+# 10  = Menu Button,
+# 11  = Back Button,
+# 12  = Left Stick Button,
+# 13  = Right Stick Button
+
 gamepad_receiver_node:
   ros__parameters:
     button_mapping:
-      deadman_switch: 9       # LeftShoulder (LB)
-      stop_motion: 10         # RightShoulder (RB)
-      close_gripper: 11       # A
-      open_gripper: 12        # B
-      switch_controller: 13   # X
-      move_home: 5            # Start
-      emergency_stop: [5, 6]  # Start + Back
+      deadman_switch: 8
+      stop_motion: 9
+      toggle_gripper: 4      
+      switch_controller: 6
+      move_home: 13
+      emergency_stop: [10, 11]
 
 gamepad_handler_node:
   ros__parameters:
     controller_whitelist:
+      - position_controller
       - gravity_compensation_controller
       - joint_trajectory_controller
       - cartesian_velocity_controller

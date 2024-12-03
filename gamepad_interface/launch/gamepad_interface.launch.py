@@ -51,6 +51,7 @@ def launch_setup(context, *args, **kwargs):
         executable="gamepad_node",
         output="screen",
         parameters=[config_file],
+        #arguments=['--ros-args', '--log-level', 'debug']
     )
 
     nodes_to_start = [gamepad_node]

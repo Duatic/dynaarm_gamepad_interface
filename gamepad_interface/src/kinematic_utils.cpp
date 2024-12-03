@@ -66,7 +66,7 @@ namespace gamepad_interface
             pose_msg.pose.position.z = transform_stamped.transform.translation.z;
             pose_msg.pose.orientation = transform_stamped.transform.rotation;
 
-            RCLCPP_INFO(node_->get_logger(),
+            RCLCPP_DEBUG(node_->get_logger(),
                         "Retrieved pose from TF: x=%f, y=%f, z=%f",
                         pose_msg.pose.position.x,
                         pose_msg.pose.position.y,

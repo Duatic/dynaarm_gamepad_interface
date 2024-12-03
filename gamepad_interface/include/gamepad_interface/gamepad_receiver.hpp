@@ -11,8 +11,7 @@ namespace gamepad_interface
     {
         int deadman_switch;
         int stop_motion;
-        int close_gripper;
-        int open_gripper;
+        int toggle_gripper;
         int switch_controller;
         int move_home;
         std::vector<int> emergency_stop;
