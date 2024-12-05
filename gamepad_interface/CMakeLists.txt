@@ -40,13 +40,17 @@ ament_target_dependencies(kinematic_utils
 add_executable(gamepad_node 
   src/gamepad_node.cpp
   src/gamepad_handler.cpp
-  src/gamepad_receiver.cpp)
+  src/gamepad_receiver.cpp
+  src/controller_helper.cpp
+  src/kinematic_utils.cpp)
 target_include_directories(gamepad_node
   PUBLIC
   include
   ${EIGEN3_INCLUDE_DIRS}  # Add Eigen3 include directories
 )
-target_link_libraries(gamepad_node kinematic_utils)
+target_link_libraries(gamepad_node 
+  ${rclcpp_LIBRARIES}
+  ${rclcpp_components_LIBRARIES})
 ament_target_dependencies(gamepad_node
   rclcpp
   sensor_msgs

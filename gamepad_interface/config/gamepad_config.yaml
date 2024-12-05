@@ -35,7 +35,7 @@ gamepad_receiver_node:
 gamepad_handler_node:
   ros__parameters:
     controller_whitelist:
-      - position_controller
+      - freedrive_controller
       - gravity_compensation_controller
       - joint_trajectory_controller
-      - cartesian_velocity_controller
+      - cartesian_motion_controller

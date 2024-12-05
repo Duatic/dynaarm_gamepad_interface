@@ -10,66 +10,25 @@ namespace gamepad_interface
           motion_enabled_(false)
     {
         cartesian_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/cartesian_motion_controller/target_frame", 10);
-
-        switch_controller_client_ = this->create_client<controller_manager_msgs::srv::SwitchController>("/controller_manager/switch_controller");
-        list_controllers_client_ = this->create_client<controller_manager_msgs::srv::ListControllers>("/controller_manager/list_controllers");
+        joint_trajectory_publisher_ = this->create_publisher<trajectory_msgs::msg::JointTrajectory>("/joint_trajectory_controller/joint_trajectory", 10);
     }
 
     void GamepadHandler::init()
     {
-        // Declare and load the whitelist parameter
-        this->declare_parameter<std::vector<std::string>>("controller_whitelist", {}, rcl_interfaces::msg::ParameterDescriptor{});
-        this->get_parameter("controller_whitelist", whitelisted_controllers_);
+        controller_helper_ = std::make_shared<ControllerHelper>(this->shared_from_this());
+        kinematic_utils_ = std::make_shared<KinematicUtils>(this->shared_from_this(), "base", "END_EFFECTOR");
 
-        // Initialize KinematicUtils
-        kinematic_utils = std::make_shared<KinematicUtils>(this->shared_from_this(), "base", "END_EFFECTOR");
-        RCLCPP_INFO(this->get_logger(), "KinematicUtils initialized.");
+        joint_names_ = kinematic_utils_->getJointNames();
 
-        listAvailableControllers();
+        if (joint_names_.empty())
+        {
+            RCLCPP_ERROR(this->get_logger(), "Failed to retrieve joint names from KinematicUtils. Motion commands will fail.");
+        }
+
+        // Update the list of available and active controllers
+        controller_helper_->updateControllers();
+
         RCLCPP_INFO(this->get_logger(), "GamepadHandler initialized.");
-    }
-
-    void GamepadHandler::listAvailableControllers()
-    {
-        if (!list_controllers_client_->wait_for_service(5s))
-        {
-            RCLCPP_ERROR(this->get_logger(), "List controllers service not available.");
-            return;
-        }
-
-        auto request = std::make_shared<controller_manager_msgs::srv::ListControllers::Request>();
-        auto result = list_controllers_client_->async_send_request(request);
-
-        // Spin until the future is complete
-        if (rclcpp::spin_until_future_complete(this->get_node_base_interface(), result) == rclcpp::FutureReturnCode::SUCCESS)
-        {
-            try
-            {
-                auto response = result.get();
-                available_controllers_.clear();
-
-                for (const auto &controller : response->controller)
-                {
-                    if (std::find(whitelisted_controllers_.begin(), whitelisted_controllers_.end(), controller.name) != whitelisted_controllers_.end())
-                    {
-                        available_controllers_.push_back(controller.name);
-                        RCLCPP_DEBUG(this->get_logger(), "Switchable controller: %s", controller.name.c_str());
-                    }
-                    else
-                    {
-                        RCLCPP_DEBUG(this->get_logger(), "Ignored controller: %s", controller.name.c_str());
-                    }
-                }
-            }
-            catch (const std::exception &e)
-            {
-                RCLCPP_ERROR(this->get_logger(), "Error processing response: %s", e.what());
-            }
-        }
-        else
-        {
-            RCLCPP_ERROR(this->get_logger(), "Failed to call list controllers service.");
-        }
     }
 
     void GamepadHandler::publishCartesianTarget(const GamepadInput &input)
@@ -81,7 +40,7 @@ namespace gamepad_interface
         }
 
         // Fetch the current pose using KinematicUtils
-        geometry_msgs::msg::PoseStamped target_pose_stamped = kinematic_utils->getCurrentPose();
+        geometry_msgs::msg::PoseStamped target_pose_stamped = kinematic_utils_->getCurrentPose();
 
         // Scale joystick input to Cartesian displacement
         double displacement_scale = 0.01;                                          // Adjust for desired sensitivity
@@ -93,44 +52,48 @@ namespace gamepad_interface
         cartesian_pose_publisher_->publish(target_pose_stamped);
 
         RCLCPP_DEBUG(this->get_logger(), "Published Cartesian target: position(x: %f, y: %f, z: %f)",
-                    target_pose_stamped.pose.position.x, target_pose_stamped.pose.position.y, target_pose_stamped.pose.position.z);
+                     target_pose_stamped.pose.position.x, target_pose_stamped.pose.position.y, target_pose_stamped.pose.position.z);
     }
 
-    void GamepadHandler::switchController(const std::string &start_controller, const std::string &stop_controller)
+    void GamepadHandler::publishJointTrajectory(const std::vector<double> &target_positions, double speed_percentage)
     {
-        if (!switch_controller_client_->wait_for_service(std::chrono::seconds(1)))
+        if (joint_names_.empty())
         {
-            RCLCPP_ERROR(this->get_logger(), "Switch controller service not available");
+            RCLCPP_ERROR(this->get_logger(), "Joint names are not set. Cannot send joint motion.");
             return;
         }
 
-        auto request = std::make_shared<controller_manager_msgs::srv::SwitchController::Request>();
-        request->activate_controllers = {start_controller};
-        request->deactivate_controllers = {stop_controller};
-        request->strictness = controller_manager_msgs::srv::SwitchController::Request::STRICT;
-
-        auto future = switch_controller_client_->async_send_request(request);
-
-        try
+        // Ensure the sizes match between joint names and target positions
+        if (target_positions.size() != joint_names_.size())
         {
-            auto response = future.get();
-            if (response->ok)
-            {
-                RCLCPP_INFO(this->get_logger(), "Switched controllers successfully.");
-            }
-            else
-            {
-                RCLCPP_ERROR(this->get_logger(), "Failed to switch controllers.");
-            }
+            RCLCPP_ERROR(this->get_logger(), "Size mismatch between joint names and target positions.");
+            return;
         }
-        catch (const std::exception &e)
-        {
-            RCLCPP_ERROR(this->get_logger(), "Error while switching controllers: %s", e.what());
-        }
+
+        // Clamp speed percentage between 1% and 100%
+        speed_percentage = std::clamp(speed_percentage, 1.0, 100.0);
+
+        trajectory_msgs::msg::JointTrajectory trajectory_msg;
+        trajectory_msg.joint_names = joint_names_;
+
+        trajectory_msgs::msg::JointTrajectoryPoint point;
+        point.positions = target_positions;
+
+        // Calculate time_from_start based on speed percentage
+        double time_seconds = 50.0 / speed_percentage;
+
+        // Convert seconds to rclcpp::Duration
+        int32_t sec = static_cast<int32_t>(std::floor(time_seconds));
+        uint32_t nanosec = static_cast<uint32_t>((time_seconds - sec) * 1e9);
+        point.time_from_start = rclcpp::Duration(sec, nanosec);
+
+        trajectory_msg.points.push_back(point);
+
+        joint_trajectory_publisher_->publish(trajectory_msg);
     }
 
     void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping)
-    {        
+    {
         motion_enabled_ = false;
 
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.deadman_switch) &&
@@ -140,18 +103,22 @@ namespace gamepad_interface
             RCLCPP_DEBUG(this->get_logger(), "Motion enabled.");
         }
 
+        // Handle controller switching
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.switch_controller) &&
             input.buttons[button_mapping.switch_controller] == 1)
         {
-            if (available_controllers_.size() > 1)
+            auto active_controllers = controller_helper_->getActiveControllers();
+            auto available_controllers = controller_helper_->getAvailableControllers();
+
+            if (!active_controllers.empty() && available_controllers.size() > 1)
             {
                 static size_t current_index = 0;
-                size_t next_index = (current_index + 1) % available_controllers_.size();
-                switchController(available_controllers_[next_index], available_controllers_[current_index]);
+                size_t next_index = (current_index + 1) % available_controllers.size();
+
+                controller_helper_->switchController(available_controllers[next_index], active_controllers[current_index]);
                 current_index = next_index;
 
-                RCLCPP_INFO(this->get_logger(),
-                            "Switched to controller: %s", available_controllers_[current_index].c_str());
+                RCLCPP_INFO(this->get_logger(), "Switched to controller: %s", available_controllers[current_index].c_str());
             }
         }
 
@@ -163,15 +130,44 @@ namespace gamepad_interface
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.move_home) &&
             input.buttons[button_mapping.move_home] == 1)
         {
-            RCLCPP_DEBUG(this->get_logger(), "Moving to the home position.");
-            // 1. Activate the joint position controller
-            // 2. Set the velocity to really slow
-            // 3. Move the robot into its home position
+            // Move to home position
+            publishJointTrajectory(std::vector<double>(joint_names_.size(), 0.0), 10.0); // Very slow speed
 
+            // If we are moving to home, we don't need to do anything else.
             return;
         }
 
-        // This is only done when the correct controller is selected
-        //publishCartesianTarget(input);
+        if (controller_helper_->isControllerActive("joint_trajectory_controller") && !input.axes.empty())
+        {
+            // General joystick-based joint control
+            std::vector<double> target_positions(joint_names_.size(), 0.0);
+            double displacement_scale = 1.0; // Adjust sensitivity
+
+            // Retrieve current joint positions from KinematicUtils or a similar source
+            auto current_positions_map = kinematic_utils_->getCurrentJointPositions(); // Assuming such a method exists
+
+            if (current_positions_map.empty())
+            {
+                RCLCPP_WARN(this->get_logger(), "No joint states received yet. Cannot compute target positions.");
+                return;
+            }
+
+            // Map current positions to target positions
+            for (size_t i = 0; i < joint_names_.size(); ++i)
+            {
+                const std::string &joint_name = joint_names_[i];
+                if (current_positions_map.find(joint_name) != current_positions_map.end())
+                {
+                    target_positions[i] = current_positions_map[joint_name] + (input.axes[i] * displacement_scale);
+                }
+                else
+                {
+                    RCLCPP_WARN(this->get_logger(), "Joint state for '%s' not found.", joint_name.c_str());
+                }
+            }
+
+            // Publish the updated joint positions
+            publishJointTrajectory(target_positions, 30.0); // Moderate speed
+        }
     }
 }
