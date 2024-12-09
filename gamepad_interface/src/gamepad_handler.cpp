@@ -94,33 +94,71 @@ namespace gamepad_interface
 
     void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping)
     {
-        motion_enabled_ = false;
-
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.deadman_switch) &&
             input.buttons[button_mapping.deadman_switch] == 1)
-        {
-            motion_enabled_ = true;
-            RCLCPP_DEBUG(this->get_logger(), "Motion enabled.");
-        }
-
-        // Handle controller switching
-        if (input.buttons.size() > static_cast<std::size_t>(button_mapping.switch_controller) &&
-            input.buttons[button_mapping.switch_controller] == 1)
-        {
-            auto active_controllers = controller_helper_->getActiveControllers();
-            auto available_controllers = controller_helper_->getAvailableControllers();
-
-            if (!active_controllers.empty() && available_controllers.size() > 1)
+        {   
+            if (input.buttons[button_mapping.deadman_switch] == 1 && motion_enabled_ == false)
             {
-                static size_t current_index = 0;
-                size_t next_index = (current_index + 1) % available_controllers.size();
-
-                controller_helper_->switchController(available_controllers[next_index], active_controllers[current_index]);
-                current_index = next_index;
-
-                RCLCPP_INFO(this->get_logger(), "Switched to controller: %s", available_controllers[current_index].c_str());
+                RCLCPP_INFO(this->get_logger(), "Motion enabled.");
             }
+            
+            motion_enabled_ = true;
         }
+        else 
+        {
+            if (motion_enabled_) 
+            {
+                RCLCPP_INFO(this->get_logger(), "Motion disabled.");
+            }
+
+            motion_enabled_ = false;
+        }    
+
+        // // Handle controller switching
+        // if (input.buttons.size() > static_cast<std::size_t>(button_mapping.switch_controller) &&
+        //     input.buttons[button_mapping.switch_controller] == 1)
+        // {
+        //     if (is_switching_controller_) 
+        //     {
+        //         return;
+        //     }
+
+        //     controller_helper_->updateControllers();
+
+        //     is_switching_controller_ = true;
+        //     auto active_controllers = controller_helper_->getActiveControllers();
+        //     auto available_controllers = controller_helper_->getAvailableControllers();
+
+        //     if (active_controllers.empty() && available_controllers.size() > 1)
+        //     {                
+        //         RCLCPP_INFO(this->get_logger(), "Activating controller: %s", available_controllers[current_index].c_str());
+        //         controller_helper_->activateController(available_controllers[current_index]);
+        //     }
+        //     else if (!active_controllers.empty() && available_controllers.size() > 1)
+        //     {                
+        //         size_t next_index = (current_index + 1) % available_controllers.size();
+
+        //         RCLCPP_INFO(this->get_logger(), "Switching to controller: %s", available_controllers[current_index].c_str());
+        //         controller_helper_->switchController(available_controllers[next_index], active_controllers[current_index]);
+        //         current_index = next_index;
+        //     }
+        //     else 
+        //     {
+        //         RCLCPP_INFO(this->get_logger(), "Can't switch to any controller.");
+        //         is_switching_controller_ = false;
+        //         return;
+        //     }
+
+        //     RCLCPP_INFO(this->get_logger(), "Controller switch: success");
+        // }
+        
+        // if (input.buttons.size() > static_cast<std::size_t>(button_mapping.switch_controller) &&
+        //     input.buttons[button_mapping.switch_controller] == 0 && 
+        //     is_switching_controller_)
+        // {
+        //     is_switching_controller_ = false;
+        // }
+        
 
         if (motion_enabled_ == false)
         {
@@ -130,6 +168,7 @@ namespace gamepad_interface
         if (input.buttons.size() > static_cast<std::size_t>(button_mapping.move_home) &&
             input.buttons[button_mapping.move_home] == 1)
         {
+            controller_helper_->activateController("joint_trajectory_controller");
             // Move to home position
             publishJointTrajectory(std::vector<double>(joint_names_.size(), 0.0), 10.0); // Very slow speed
 

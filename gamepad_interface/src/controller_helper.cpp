@@ -25,7 +25,7 @@ ControllerHelper::ControllerHelper(const rclcpp::Node::SharedPtr &node)
 }
 
 void ControllerHelper::updateControllers()
-{
+{   
     if (!list_controllers_client_->wait_for_service(std::chrono::seconds(5)))
     {
         RCLCPP_ERROR(node_->get_logger(), "List controllers service not available.");
@@ -43,10 +43,14 @@ void ControllerHelper::updateControllers()
     }
 
     try
-    {
+    {   
+        std::cout << 3 << std::endl;
         auto response = future.get();
+
         available_controllers_.clear();
         active_controllers_.clear();
+
+        std::cout << 4 << std::endl;
 
         for (const auto &controller : response->controller)
         {
@@ -94,8 +98,42 @@ bool ControllerHelper::isControllerAvailable(const std::string &controller_name)
     return std::find(available_controllers_.begin(), available_controllers_.end(), controller_name) != available_controllers_.end();
 }
 
-bool ControllerHelper::switchController(const std::string &start_controller, const std::string &stop_controller)
+bool ControllerHelper::activateController(const std::string &start_controller)
 {
+    if (!isControllerAvailable(start_controller))
+    {
+        RCLCPP_ERROR(node_->get_logger(), "Controller '%s' is not available.", start_controller.c_str());
+        return false;
+    }
+
+    if (isControllerActive(start_controller))
+    {
+        RCLCPP_INFO(node_->get_logger(), "Controller '%s' is already active.", start_controller.c_str());
+        return true;
+    }
+
+    return switchController(start_controller, {});
+}
+
+bool ControllerHelper::deactivateController(const std::string &stop_controller)
+{
+    if (!isControllerAvailable(stop_controller))
+    {
+        RCLCPP_ERROR(node_->get_logger(), "Controller '%s' is not available.", stop_controller.c_str());
+        return false;
+    }
+
+    if (!isControllerActive(stop_controller))
+    {
+        RCLCPP_INFO(node_->get_logger(), "Controller '%s' is not active.", stop_controller.c_str());
+        return true;
+    }
+
+    return switchController({}, stop_controller);
+}
+
+bool ControllerHelper::switchController(const std::string &start_controller, const std::string &stop_controller)
+{       
     if (!switch_controller_client_->wait_for_service(std::chrono::seconds(5)))
     {
         RCLCPP_ERROR(node_->get_logger(), "Switch controller service not available.");
@@ -103,8 +141,19 @@ bool ControllerHelper::switchController(const std::string &start_controller, con
     }
 
     auto request = std::make_shared<controller_manager_msgs::srv::SwitchController::Request>();
-    request->activate_controllers = {start_controller};
-    request->deactivate_controllers = {stop_controller};
+
+    // Only add the start_controller if it is not empty
+    if (!start_controller.empty())
+    {
+        request->activate_controllers = {start_controller};
+    }
+
+    // Only add the stop_controller if it is not empty
+    if (!stop_controller.empty())
+    {
+        request->deactivate_controllers = {stop_controller};
+    }
+
     request->strictness = controller_manager_msgs::srv::SwitchController::Request::STRICT;
 
     auto future = switch_controller_client_->async_send_request(request);

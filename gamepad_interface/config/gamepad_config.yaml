@@ -1,41 +1,41 @@
 # AXES
 # 0 = Left Stick X
 # 1 = Left Stick Y
-# 2 = Right Stick X
-# 3 = Right Stick Y
-# 4 = Left Trigger
+# 2 = Left Trigger
+# 3 = Right Stick X
+# 4 = Right Stick Y
 # 5 = Right Trigger
+# 6 = Dpad X
+# 7 = Dpad Y
 
 # BUTTONS
-# 0   = DPad Up
-# 1   = DPad Down
-# 2   = DPad Left,
-# 3   = DPad Right,
-# 4   = Face Top,
-# 5   = Face Bottom,
-# 6   = Face Left,
-# 7   = Face Right,
-# 8   = Left Shoulder,
-# 9   = Right Shoulder,
-# 10  = Menu Button,
-# 11  = Back Button,
-# 12  = Left Stick Button,
-# 13  = Right Stick Button
+# 0   = Face Bottom
+# 1   = Face Right
+# 2   = Face Top
+# 3   = Face Left
+# 4   = Left Shoulder
+# 5   = Right Shoulder
+# 6   = Left Trigger
+# 7   = Right Trigger
+# 8   = Back Button
+# 9   = Menu Button
+# 10  = PS5
+# 11  = Left Stick Button
+# 12  = Right Stick Button
 
 gamepad_receiver_node:
   ros__parameters:
     button_mapping:
-      deadman_switch: 8
-      stop_motion: 9
-      toggle_gripper: 4      
-      switch_controller: 6
-      move_home: 13
-      emergency_stop: [10, 11]
+      deadman_switch: 4
+      stop_motion: 5
+      toggle_gripper: 2      
+      switch_controller: 3
+      move_home: 12
+      emergency_stop: [8, 9]
 
 gamepad_handler_node:
   ros__parameters:
     controller_whitelist:
-      - freedrive_controller
-      - gravity_compensation_controller
+      - freedrive_controller      
       - joint_trajectory_controller
       - cartesian_motion_controller

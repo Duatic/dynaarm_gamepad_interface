@@ -24,6 +24,12 @@ public:
     // Get the whitelisted controllers
     const std::vector<std::string>& getWhitelistedControllers() const;
 
+    // Activate controller
+    bool activateController(const std::string &start_controller);
+
+    // Activate controller
+    bool deactivateController(const std::string &stop_controller);
+
     // Switch from one controller to another
     bool switchController(const std::string &start_controller, const std::string &stop_controller);
 

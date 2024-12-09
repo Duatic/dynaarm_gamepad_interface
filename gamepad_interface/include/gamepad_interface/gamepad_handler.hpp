@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+
 #include <rclcpp/rclcpp.hpp>
 #include "controller_helper.hpp"
 
@@ -30,6 +32,7 @@ namespace gamepad_interface
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr cartesian_pose_publisher_;
 
         bool motion_enabled_;
+        bool is_moving_home_ = false;
         ButtonMapping button_mapping_;
         std::vector<std::string> joint_names_;
     };
