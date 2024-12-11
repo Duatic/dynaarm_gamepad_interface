@@ -196,7 +196,7 @@ namespace gamepad_interface
         }
 
         // Publish the updated joint positions
-        publishJointTrajectory(target_positions, 80.0);
+        publishJointTrajectory(target_positions, 50.0);
     }
 
     void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping, const AxisMapping &axis_mapping)
