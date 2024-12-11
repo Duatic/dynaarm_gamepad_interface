@@ -19,9 +19,12 @@ namespace gamepad_interface
         explicit GamepadHandler();
 
         void init();
-        void handleInput(const GamepadInput &input, const ButtonMapping &button_mapping);
+        void handleInput(const GamepadInput &input, const ButtonMapping &button_mapping, const AxisMapping &axis_mapping);
 
     private:
+        void moveCart();
+        void moveJoints(const GamepadInput &input, const AxisMapping &axis_mapping, const ButtonMapping &button_mapping);
+        void holdCurrentPosition();
         void publishCartesianTarget(const GamepadInput &input);
         void publishJointTrajectory(const std::vector<double> &target_positions, double speed_percentage);
 

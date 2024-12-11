@@ -43,14 +43,11 @@ void ControllerHelper::updateControllers()
     }
 
     try
-    {   
-        std::cout << 3 << std::endl;
+    {           
         auto response = future.get();
 
         available_controllers_.clear();
         active_controllers_.clear();
-
-        std::cout << 4 << std::endl;
 
         for (const auto &controller : response->controller)
         {

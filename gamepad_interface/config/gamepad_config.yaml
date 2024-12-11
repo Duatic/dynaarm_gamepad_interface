@@ -1,37 +1,46 @@
 # AXES
 # 0 = Left Stick X
 # 1 = Left Stick Y
-# 2 = Left Trigger
-# 3 = Right Stick X
-# 4 = Right Stick Y
+# 2 = Right Stick X
+# 3 = Right Stick Y
+# 4 = Left Trigger
 # 5 = Right Trigger
-# 6 = Dpad X
-# 7 = Dpad Y
 
 # BUTTONS
 # 0   = Face Bottom
 # 1   = Face Right
-# 2   = Face Top
-# 3   = Face Left
-# 4   = Left Shoulder
-# 5   = Right Shoulder
-# 6   = Left Trigger
-# 7   = Right Trigger
-# 8   = Back Button
-# 9   = Menu Button
-# 10  = PS5
-# 11  = Left Stick Button
-# 12  = Right Stick Button
+# 2   = Face Left
+# 3   = Face Top
+# 4   = Back Button 
+# 5   = PS5  
+# 6   = Menu Button
+# 7   = Left Stick Button
+# 8   = Right Stick Button
+# 9   = Left Shoulder
+# 10  = Right Shoulder
+# 11  = DPad up
+# 12  = DPad down
+# 13  = DPad left
+# 14  = DPad right
+
 
 gamepad_receiver_node:
   ros__parameters:
     button_mapping:
-      deadman_switch: 4
-      stop_motion: 5
-      toggle_gripper: 2      
-      switch_controller: 3
-      move_home: 12
-      emergency_stop: [8, 9]
+      deadman_switch: 9      
+      move_home: 2
+      wrist_rotation_left: 7
+      wrist_rotation_right: 8  
+    axis_mapping:
+      left_joystick:
+        x: 0
+        y: 1
+      right_joystick:
+        x: 2
+        y: 3
+      triggers:
+        left: 4
+        right: 5
 
 gamepad_handler_node:
   ros__parameters:

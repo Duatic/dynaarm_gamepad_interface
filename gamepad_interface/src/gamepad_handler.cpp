@@ -88,125 +88,150 @@ namespace gamepad_interface
         point.time_from_start = rclcpp::Duration(sec, nanosec);
 
         trajectory_msg.points.push_back(point);
-
         joint_trajectory_publisher_->publish(trajectory_msg);
     }
 
-    void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping)
+    void GamepadHandler::holdCurrentPosition() 
     {
-        if (input.buttons.size() > static_cast<std::size_t>(button_mapping.deadman_switch) &&
-            input.buttons[button_mapping.deadman_switch] == 1)
-        {   
-            if (input.buttons[button_mapping.deadman_switch] == 1 && motion_enabled_ == false)
-            {
-                RCLCPP_INFO(this->get_logger(), "Motion enabled.");
-            }
-            
-            motion_enabled_ = true;
-        }
-        else 
+        // Retrieve current joint positions from KinematicUtils or a similar source
+        auto current_positions_map = kinematic_utils_->getCurrentJointPositions(); 
+
+        if (current_positions_map.empty())
         {
-            if (motion_enabled_) 
-            {
-                RCLCPP_INFO(this->get_logger(), "Motion disabled.");
-            }
-
-            motion_enabled_ = false;
-        }    
-
-        // // Handle controller switching
-        // if (input.buttons.size() > static_cast<std::size_t>(button_mapping.switch_controller) &&
-        //     input.buttons[button_mapping.switch_controller] == 1)
-        // {
-        //     if (is_switching_controller_) 
-        //     {
-        //         return;
-        //     }
-
-        //     controller_helper_->updateControllers();
-
-        //     is_switching_controller_ = true;
-        //     auto active_controllers = controller_helper_->getActiveControllers();
-        //     auto available_controllers = controller_helper_->getAvailableControllers();
-
-        //     if (active_controllers.empty() && available_controllers.size() > 1)
-        //     {                
-        //         RCLCPP_INFO(this->get_logger(), "Activating controller: %s", available_controllers[current_index].c_str());
-        //         controller_helper_->activateController(available_controllers[current_index]);
-        //     }
-        //     else if (!active_controllers.empty() && available_controllers.size() > 1)
-        //     {                
-        //         size_t next_index = (current_index + 1) % available_controllers.size();
-
-        //         RCLCPP_INFO(this->get_logger(), "Switching to controller: %s", available_controllers[current_index].c_str());
-        //         controller_helper_->switchController(available_controllers[next_index], active_controllers[current_index]);
-        //         current_index = next_index;
-        //     }
-        //     else 
-        //     {
-        //         RCLCPP_INFO(this->get_logger(), "Can't switch to any controller.");
-        //         is_switching_controller_ = false;
-        //         return;
-        //     }
-
-        //     RCLCPP_INFO(this->get_logger(), "Controller switch: success");
-        // }
-        
-        // if (input.buttons.size() > static_cast<std::size_t>(button_mapping.switch_controller) &&
-        //     input.buttons[button_mapping.switch_controller] == 0 && 
-        //     is_switching_controller_)
-        // {
-        //     is_switching_controller_ = false;
-        // }
-        
-
-        if (motion_enabled_ == false)
-        {
+            RCLCPP_WARN(this->get_logger(), "No joint states received yet. Cannot compute target positions.");
             return;
         }
 
-        if (input.buttons.size() > static_cast<std::size_t>(button_mapping.move_home) &&
+        std::vector<double> target_positions(joint_names_.size(), 0.0);
+
+        // Map current positions to target positions
+        for (size_t i = 0; i < joint_names_.size(); ++i)
+        {
+            const std::string &joint_name = joint_names_[i];
+            if (current_positions_map.find(joint_name) != current_positions_map.end())
+            {
+                target_positions[i] = current_positions_map[joint_name];
+            }
+            else
+            {
+                RCLCPP_WARN(this->get_logger(), "Joint state for '%s' not found.", joint_name.c_str());
+            }
+        }
+
+        // Publish the updated joint positions
+        publishJointTrajectory(target_positions, 10.0);
+    }
+
+    void GamepadHandler::moveJoints(const GamepadInput &input, const AxisMapping &axis_mapping, const ButtonMapping &button_mapping)
+    {
+        if (joint_names_.empty())
+        {
+            RCLCPP_ERROR(this->get_logger(), "Joint names are not set. Cannot send joint motion.");
+            return;
+        }
+
+        // Retrieve current joint positions from KinematicUtils
+        auto current_positions_map = kinematic_utils_->getCurrentJointPositions();
+
+        if (current_positions_map.empty())
+        {
+            RCLCPP_WARN(this->get_logger(), "No joint states received yet. Cannot compute target positions.");
+            return;
+        }
+
+        std::vector<double> target_positions(joint_names_.size(), 0.0);
+        double displacement_scale = 1.0; // Adjust for sensitivity
+
+        // Map joystick inputs to joint positions based on axis mapping
+        for (size_t i = 0; i < joint_names_.size(); ++i)
+        {
+            const std::string &joint_name = joint_names_[i];
+
+            if (current_positions_map.find(joint_name) == current_positions_map.end())
+            {
+                RCLCPP_WARN(this->get_logger(), "Joint state for '%s' not found.", joint_name.c_str());
+                continue;
+            }
+
+            if (i == 0 && input.axes.size() > static_cast<size_t>(axis_mapping.left_joystick.x))
+            {
+                target_positions[i] = current_positions_map[joint_name] + (input.axes[axis_mapping.left_joystick.x] * displacement_scale);
+            }
+            else if (i == 1 && input.axes.size() > static_cast<size_t>(axis_mapping.left_joystick.y))
+            {
+                target_positions[i] = current_positions_map[joint_name] + (input.axes[axis_mapping.left_joystick.y] * displacement_scale);
+            }
+            else if (i == 2 && input.axes.size() > static_cast<size_t>(axis_mapping.right_joystick.y))
+            {
+                target_positions[i] = current_positions_map[joint_name] + (input.axes[axis_mapping.right_joystick.y] * displacement_scale);
+            }
+            else if (i == 3 && input.axes.size() > static_cast<size_t>(axis_mapping.right_joystick.x))
+            {
+                target_positions[i] = current_positions_map[joint_name] + (input.axes[axis_mapping.right_joystick.x] * displacement_scale);
+            }
+            else if (i == 4)
+            {                
+                double left_trigger = (input.axes.size() > static_cast<size_t>(axis_mapping.triggers.left)) ? input.axes[axis_mapping.triggers.left] : 0.0;
+                double right_trigger = (input.axes.size() > static_cast<size_t>(axis_mapping.triggers.right)) ? input.axes[axis_mapping.triggers.right] : 0.0;
+                target_positions[i] = current_positions_map[joint_name] + ((right_trigger - left_trigger) * displacement_scale);                
+            }
+            else if (i == 5)
+            {
+                bool move_left = (input.buttons.size() > static_cast<size_t>(button_mapping.wrist_rotation_left)) && input.buttons[button_mapping.wrist_rotation_left];
+                bool move_right = (input.buttons.size() > static_cast<size_t>(button_mapping.wrist_rotation_right)) && input.buttons[button_mapping.wrist_rotation_right];
+
+                if (move_left)
+                {
+                    target_positions[i] = current_positions_map[joint_name] - displacement_scale;
+                }
+                else if (move_right)
+                {
+                    target_positions[i] = current_positions_map[joint_name] + displacement_scale;
+                }
+                else
+                {
+                    target_positions[i] = current_positions_map[joint_name];
+                }
+            }
+        }
+
+        // Publish the updated joint positions
+        publishJointTrajectory(target_positions, 80.0);
+    }
+
+    void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping, const AxisMapping &axis_mapping)
+    {
+        if (input.buttons.size() > static_cast<std::size_t>(button_mapping.deadman_switch) &&
+            input.buttons[button_mapping.deadman_switch] == 1)
+        {
+            if (!motion_enabled_)
+            {
+                RCLCPP_INFO(this->get_logger(), "Motion enabled.");
+                motion_enabled_ = true;
+            }
+        }
+        else
+        {
+            if (motion_enabled_)
+            {
+                holdCurrentPosition();
+                RCLCPP_INFO(this->get_logger(), "Motion disabled.");
+                motion_enabled_ = false;
+            }
+            return;
+        }
+
+        if (motion_enabled_ && input.buttons.size() > static_cast<std::size_t>(button_mapping.move_home) &&
             input.buttons[button_mapping.move_home] == 1)
         {
-            controller_helper_->activateController("joint_trajectory_controller");
             // Move to home position
-            publishJointTrajectory(std::vector<double>(joint_names_.size(), 0.0), 10.0); // Very slow speed
-
-            // If we are moving to home, we don't need to do anything else.
+            publishJointTrajectory(std::vector<double>(joint_names_.size(), 0.0), 10.0);
             return;
         }
 
         if (controller_helper_->isControllerActive("joint_trajectory_controller") && !input.axes.empty())
         {
-            // General joystick-based joint control
-            std::vector<double> target_positions(joint_names_.size(), 0.0);
-            double displacement_scale = 1.0; // Adjust sensitivity
-
-            // Retrieve current joint positions from KinematicUtils or a similar source
-            auto current_positions_map = kinematic_utils_->getCurrentJointPositions(); // Assuming such a method exists
-
-            if (current_positions_map.empty())
-            {
-                RCLCPP_WARN(this->get_logger(), "No joint states received yet. Cannot compute target positions.");
-                return;
-            }
-
-            // Map current positions to target positions
-            for (size_t i = 0; i < joint_names_.size(); ++i)
-            {
-                const std::string &joint_name = joint_names_[i];
-                if (current_positions_map.find(joint_name) != current_positions_map.end())
-                {
-                    target_positions[i] = current_positions_map[joint_name] + (input.axes[i] * displacement_scale);
-                }
-                else
-                {
-                    RCLCPP_WARN(this->get_logger(), "Joint state for '%s' not found.", joint_name.c_str());
-                }
-            }
-
-            // Publish the updated joint positions
-            publishJointTrajectory(target_positions, 30.0); // Moderate speed
+            moveJoints(input, axis_mapping, button_mapping);
         }
     }
 }

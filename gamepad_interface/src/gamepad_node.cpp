@@ -14,9 +14,11 @@ int main(int argc, char **argv)
 
     // Set the input callback to pass data from receiver to handler
     receiver->setInputCallback(
-        [handler](const gamepad_interface::GamepadInput &input, const gamepad_interface::ButtonMapping &button_mapping)
+        [handler](const gamepad_interface::GamepadInput &input, 
+                    const gamepad_interface::ButtonMapping &button_mapping,
+                    const gamepad_interface::AxisMapping &axis_mapping)
         {
-            handler->handleInput(input, button_mapping);
+            handler->handleInput(input, button_mapping, axis_mapping);
         });
 
     // Run the node
