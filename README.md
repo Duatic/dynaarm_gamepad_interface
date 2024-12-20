@@ -9,7 +9,9 @@ Images in this repository are to be licensed separately if you want to use them 
 
 # Usage
 
+```bash
 ros2 launch dynaarm_gamepad_interface gamepad_interface.launch.py
+```
 
 # Contributing
 
