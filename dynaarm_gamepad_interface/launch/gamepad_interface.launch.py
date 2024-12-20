@@ -34,8 +34,8 @@ def launch_setup(context, *args, **kwargs):
     config_file = LaunchConfiguration("config_file").perform(context)
 
     # Load the robot description
-    gamepad_interface_pkg = FindPackageShare(package="gamepad_interface").find(
-        "gamepad_interface"
+    gamepad_interface_pkg = FindPackageShare(package="dynaarm_gamepad_interface").find(
+        "dynaarm_gamepad_interface"
     )
 
     # Validate the config file
@@ -46,15 +46,18 @@ def launch_setup(context, *args, **kwargs):
         raise FileNotFoundError(f"Configuration file not found: {config_file}")
 
     # Publish the joint state values for the non-fixed joints in the URDF file.
+    joy_node = Node(package="joy", executable="game_controller_node", output="screen")
+
+    # Publish the joint state values for the non-fixed joints in the URDF file.
     gamepad_node = Node(
-        package="gamepad_interface",
+        package="dynaarm_gamepad_interface",
         executable="gamepad_node",
         output="screen",
         parameters=[config_file],
-        #arguments=['--ros-args', '--log-level', 'debug']
+        # arguments=['--ros-args', '--log-level', 'debug']
     )
 
-    nodes_to_start = [gamepad_node]
+    nodes_to_start = [gamepad_node, joy_node]
 
     return nodes_to_start
 
@@ -71,6 +74,4 @@ def generate_launch_description():
         )
     )
 
-    return LaunchDescription(
-        declared_arguments + [OpaqueFunction(function=launch_setup)]
-    )
+    return LaunchDescription(declared_arguments + [OpaqueFunction(function=launch_setup)])

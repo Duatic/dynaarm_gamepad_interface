@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8)
-project(gamepad_interface)
+project(dynaarm_gamepad_interface)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,7 +28,7 @@ target_include_directories(kinematic_utils
     include
     ${EIGEN3_INCLUDE_DIRS}  # Add Eigen3 include directories
 )
-ament_target_dependencies(kinematic_utils 
+ament_target_dependencies(kinematic_utils
   rclcpp
   tf2
   tf2_ros
@@ -37,7 +37,7 @@ ament_target_dependencies(kinematic_utils
   pinocchio
   Eigen3)
 
-add_executable(gamepad_node 
+add_executable(gamepad_node
   src/gamepad_node.cpp
   src/gamepad_handler.cpp
   src/gamepad_receiver.cpp
@@ -48,7 +48,7 @@ target_include_directories(gamepad_node
   include
   ${EIGEN3_INCLUDE_DIRS}  # Add Eigen3 include directories
 )
-target_link_libraries(gamepad_node 
+target_link_libraries(gamepad_node
   ${rclcpp_LIBRARIES}
   ${rclcpp_components_LIBRARIES})
 ament_target_dependencies(gamepad_node
@@ -59,7 +59,7 @@ ament_target_dependencies(gamepad_node
   geometry_msgs
   std_msgs
   tf2
-  tf2_ros  
+  tf2_ros
   pinocchio
   Eigen3
 )
