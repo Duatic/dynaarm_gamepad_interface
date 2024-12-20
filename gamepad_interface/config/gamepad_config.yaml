@@ -11,8 +11,8 @@
 # 1   = Face Right
 # 2   = Face Left
 # 3   = Face Top
-# 4   = Back Button 
-# 5   = PS5  
+# 4   = Back Button
+# 5   = PS5
 # 6   = Menu Button
 # 7   = Left Stick Button
 # 8   = Right Stick Button
@@ -23,14 +23,13 @@
 # 13  = DPad left
 # 14  = DPad right
 
-
 gamepad_receiver_node:
   ros__parameters:
     button_mapping:
-      deadman_switch: 9      
+      deadman_switch: 9
       move_home: 2
       wrist_rotation_left: 7
-      wrist_rotation_right: 8  
+      wrist_rotation_right: 8
     axis_mapping:
       left_joystick:
         x: 0
@@ -45,6 +44,6 @@ gamepad_receiver_node:
 gamepad_handler_node:
   ros__parameters:
     controller_whitelist:
-      - freedrive_controller      
+      - freedrive_controller
       - joint_trajectory_controller
       - cartesian_motion_controller

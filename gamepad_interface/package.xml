@@ -2,10 +2,13 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>gamepad_interface</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="tschwarzer@software-byts.de">root</maintainer>
-  <license>TODO: License declaration</license>
+  <version>0.0.1</version>
+  <description>The gamepad_interface for the dynaarm</description>
+
+  <license>BSD 3-Clause</license>
+
+  <author email="tschwarzer@duatic.com">Timo Schwarzer</author>
+  <maintainer email="tschwarzer@duatic.com">Timo Schwarzer</maintainer>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
