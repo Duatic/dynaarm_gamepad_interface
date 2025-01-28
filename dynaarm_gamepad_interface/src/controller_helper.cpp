@@ -31,7 +31,7 @@ ControllerHelper::ControllerHelper(const rclcpp::Node::SharedPtr &node)
     switch_controller_client_ = node_->create_client<controller_manager_msgs::srv::SwitchController>("/controller_manager/switch_controller");
 
     // Load the whitelist parameter
-    node_->declare_parameter<std::vector<std::string>>("controller_whitelist", std::vector<std::string>{}, rcl_interfaces::msg::ParameterDescriptor{});    
+    node_->declare_parameter<std::vector<std::string>>("controller_whitelist", std::vector<std::string>{}, rcl_interfaces::msg::ParameterDescriptor{});
     node_->get_parameter("controller_whitelist", whitelisted_controllers_);
 
     if (whitelisted_controllers_.empty())
