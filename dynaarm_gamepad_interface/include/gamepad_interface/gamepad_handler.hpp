@@ -58,7 +58,6 @@ namespace gamepad_interface
         rclcpp::Publisher<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_trajectory_publisher_;
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr cartesian_pose_publisher_;
 
-        bool motion_enabled_;
         bool is_moving_home_ = false;
         ButtonMapping button_mapping_;
         std::vector<std::string> joint_names_;

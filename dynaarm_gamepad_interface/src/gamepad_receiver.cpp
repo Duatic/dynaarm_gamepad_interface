@@ -55,7 +55,6 @@ namespace gamepad_interface
     void GamepadReceiver::loadMappings()
     {
         // Load button mappings
-        button_mapping_.deadman_switch = this->declare_parameter<int>("button_mapping.deadman_switch", 9);
         button_mapping_.move_home = this->declare_parameter<int>("button_mapping.move_home", 12);
         button_mapping_.wrist_rotation_left = this->declare_parameter<int>("button_mapping.wrist_rotation_left", 11);
         button_mapping_.wrist_rotation_right = this->declare_parameter<int>("button_mapping.wrist_rotation_right", 12);
@@ -70,7 +69,6 @@ namespace gamepad_interface
 
         // Log loaded mappings
         RCLCPP_DEBUG(this->get_logger(), "Button Mappings:");
-        RCLCPP_DEBUG(this->get_logger(), "  Deadman Switch: %d", button_mapping_.deadman_switch);
         RCLCPP_DEBUG(this->get_logger(), "  Move Home: %d", button_mapping_.move_home);
         RCLCPP_DEBUG(this->get_logger(), "  Wrist Rotation Left: %d", button_mapping_.wrist_rotation_left);
         RCLCPP_DEBUG(this->get_logger(), "  Wrist Rotation Right: %d", button_mapping_.wrist_rotation_right);

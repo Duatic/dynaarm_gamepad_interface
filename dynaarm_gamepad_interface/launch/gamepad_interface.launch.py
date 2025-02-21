@@ -46,9 +46,6 @@ def launch_setup(context, *args, **kwargs):
         raise FileNotFoundError(f"Configuration file not found: {config_file}")
 
     # Publish the joint state values for the non-fixed joints in the URDF file.
-    joy_node = Node(package="joy", executable="game_controller_node", output="screen")
-
-    # Publish the joint state values for the non-fixed joints in the URDF file.
     gamepad_node = Node(
         package="dynaarm_gamepad_interface",
         executable="gamepad_node",
@@ -57,7 +54,7 @@ def launch_setup(context, *args, **kwargs):
         # arguments=['--ros-args', '--log-level', 'debug']
     )
 
-    nodes_to_start = [gamepad_node, joy_node]
+    nodes_to_start = [gamepad_node]
 
     return nodes_to_start
 

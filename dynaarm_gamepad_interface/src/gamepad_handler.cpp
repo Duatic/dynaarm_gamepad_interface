@@ -30,8 +30,7 @@ using namespace std::chrono_literals;
 namespace gamepad_interface
 {
     GamepadHandler::GamepadHandler()
-        : Node("gamepad_handler_node"),
-          motion_enabled_(false)
+        : Node("gamepad_handler_node")
     {
         cartesian_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/cartesian_motion_controller/target_frame", 10);
         joint_trajectory_publisher_ = this->create_publisher<trajectory_msgs::msg::JointTrajectory>("/joint_trajectory_controller/joint_trajectory", 10);
@@ -225,27 +224,7 @@ namespace gamepad_interface
 
     void GamepadHandler::handleInput(const GamepadInput &input, const ButtonMapping &button_mapping, const AxisMapping &axis_mapping)
     {
-        if (input.buttons.size() > static_cast<std::size_t>(button_mapping.deadman_switch) &&
-            input.buttons[button_mapping.deadman_switch] == 1)
-        {
-            if (!motion_enabled_)
-            {
-                RCLCPP_INFO(this->get_logger(), "Motion enabled.");
-                motion_enabled_ = true;
-            }
-        }
-        else
-        {
-            if (motion_enabled_)
-            {
-                holdCurrentPosition();
-                RCLCPP_INFO(this->get_logger(), "Motion disabled.");
-                motion_enabled_ = false;
-            }
-            return;
-        }
-
-        if (motion_enabled_ && input.buttons.size() > static_cast<std::size_t>(button_mapping.move_home) &&
+        if (input.buttons.size() > static_cast<std::size_t>(button_mapping.move_home) &&
             input.buttons[button_mapping.move_home] == 1)
         {
             // Move to home position
