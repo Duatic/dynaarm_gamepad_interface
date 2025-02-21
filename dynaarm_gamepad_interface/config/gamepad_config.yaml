@@ -25,8 +25,7 @@
 
 gamepad_receiver_node:
   ros__parameters:
-    button_mapping:
-      deadman_switch: 9
+    button_mapping:      
       move_home: 2
       wrist_rotation_left: 7
       wrist_rotation_right: 8
