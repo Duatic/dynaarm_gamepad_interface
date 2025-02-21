@@ -30,7 +30,7 @@ using namespace std::chrono_literals;
 namespace gamepad_interface
 {
     GamepadHandler::GamepadHandler()
-        : Node("gamepad_handler_node")          
+        : Node("gamepad_handler_node")
     {
         cartesian_pose_publisher_ = this->create_publisher<geometry_msgs::msg::PoseStamped>("/cartesian_motion_controller/target_frame", 10);
         joint_trajectory_publisher_ = this->create_publisher<trajectory_msgs::msg::JointTrajectory>("/joint_trajectory_controller/joint_trajectory", 10);
