@@ -1,6 +1,7 @@
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from std_msgs.msg import Float64MultiArray
 
+
 class PositionController(BaseController):
     """Handles position control using the gamepad"""
 
@@ -22,7 +23,9 @@ class PositionController(BaseController):
 
         joint_states = self.get_joint_states()
         if not joint_states:
-            self.node.get_logger().warn("No joint states available. Cannot process input.", throttle_duration_sec=5.0)
+            self.node.get_logger().warn(
+                "No joint states available. Cannot process input.", throttle_duration_sec=5.0
+            )
             return
 
         joint_names = list(joint_states.keys())  # Extract joint names
@@ -32,7 +35,9 @@ class PositionController(BaseController):
         if not self.initial_positions_set:
             self.commanded_positions = current_positions[:]
             self.initial_positions_set = True
-            self.node.get_logger().info("Initialized commanded positions with current joint states.")
+            self.node.get_logger().info(
+                "Initialized commanded positions with current joint states."
+            )
 
         any_axis_active = False
         displacement_scale = 0.005  # Scale for joystick movement sensitivity

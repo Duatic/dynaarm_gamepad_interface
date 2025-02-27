@@ -1,5 +1,6 @@
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 
+
 class CartesianController(BaseController):
     """Handles Cartesian control mode."""
 

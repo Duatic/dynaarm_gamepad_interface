@@ -4,6 +4,7 @@ import math
 import time
 from collections import deque
 
+
 class JointTrajectoryController(BaseController):
     """Handles joint trajectory control using the gamepad"""
 
@@ -21,7 +22,7 @@ class JointTrajectoryController(BaseController):
         self.active_axes = {}  # Track active joystick axes (to detect when they go to 0)
         self.last_command_time = time.time()  # Track last command time
 
-        # FIFO-Warteschlange für sanfte Bewegungen (mehr Punkte, aber kontrollierte Verzögerung)
+        # FIFO queue for smooth movements (more points, but controlled delay)
         self.trajectory_buffer = deque(maxlen=15)
 
     def process_input(self, joy_msg):
@@ -30,7 +31,9 @@ class JointTrajectoryController(BaseController):
 
         joint_states = self.get_joint_states()
         if not joint_states:
-            self.node.get_logger().warn("No joint states available. Cannot process input.", throttle_duration_sec=5.0)
+            self.node.get_logger().warn(
+                "No joint states available. Cannot process input.", throttle_duration_sec=5.0
+            )
             return
 
         joint_names = list(joint_states.keys())  # Extract joint names
@@ -40,12 +43,14 @@ class JointTrajectoryController(BaseController):
         if not self.initial_positions_set:
             self.commanded_positions = current_positions[:]
             self.initial_positions_set = True
-            self.node.get_logger().info("Initialized commanded positions with current joint states.")
+            self.node.get_logger().info(
+                "Initialized commanded positions with current joint states."
+            )
 
         any_axis_active = False
-        displacement_scale = 0.004  # Noch kleinere Schrittgröße für feinfühlige Steuerung
-        deadzone = 0.08  # Kleinere Deadzone, um feine Bewegungen zuzulassen
-        max_step = 0.008  # Kleinere maximale Schrittweite
+        displacement_scale = 0.004  # Even smaller step size for sensitive control
+        deadzone = 0.08  # Smaller deadzone to allow fine movements
+        max_step = 0.008  # Smaller maximum step size
 
         # Process each joint based on gamepad axis input
         for i, joint_name in enumerate(joint_names):
@@ -65,18 +70,18 @@ class JointTrajectoryController(BaseController):
                 right_trigger = joy_msg.axes[self.node.axis_mapping["triggers"]["right"]]
                 axis_val = right_trigger - left_trigger
 
-            # Wenn die Achse inaktiv wurde, setze das Ziel auf die aktuelle Position
-            if abs(axis_val) < deadzone and self.active_axes.get(i, False):      
-                joint_states = self.get_joint_states()    
+            # If the axis became inactive, set the target to the current position
+            if abs(axis_val) < deadzone and self.active_axes.get(i, False):
+                joint_states = self.get_joint_states()
                 current_positions = list(joint_states.values())
                 self.commanded_positions[i] = current_positions[i]
 
-            # Update command wenn die Achse aktiv ist, aber mit max_step-Limit
+            # Update command if the axis is active, but limit with max_step
             if abs(axis_val) > deadzone:
                 target_position = self.commanded_positions[i] + axis_val * displacement_scale
                 delta = target_position - self.commanded_positions[i]
                 if abs(delta) > max_step:
-                    delta = max_step * math.copysign(1, delta)  # Begrenze Änderung auf max_step
+                    delta = max_step * math.copysign(1, delta)  # Limit change to max_step
                 self.commanded_positions[i] += delta
 
                 any_axis_active = True
@@ -84,19 +89,21 @@ class JointTrajectoryController(BaseController):
             else:
                 self.active_axes[i] = False  # Mark axis as inactive
 
-        # **FIFO-Warteschlange verwenden für flüssige Bewegung**
+        # **Use FIFO queue for smooth movement**
         self.trajectory_buffer.append(list(self.commanded_positions))
 
         if any_axis_active:
             self.is_joystick_idle = False
             if len(self.trajectory_buffer) == self.trajectory_buffer.maxlen:
-                self.publish_joint_trajectory(list(self.trajectory_buffer), speed_percentage=85.0)  # Höhere Rate
+                self.publish_joint_trajectory(
+                    list(self.trajectory_buffer), speed_percentage=85.0
+                )  # Higher rate
             self.last_command_time = time.time()
         elif not any_axis_active and not self.is_joystick_idle:
-            if time.time() - self.last_command_time > 0.05:  # Sehr kurze Verzögerung
+            if time.time() - self.last_command_time > 0.05:  # Very short delay
                 self.publish_joint_trajectory(list(self.trajectory_buffer), speed_percentage=85.0)
                 self.is_joystick_idle = True
-                # **Letztes stabilisierendes Signal senden**
+                # **Send final stabilizing signal**
                 self.trajectory_buffer.appendleft(self.commanded_positions[:])
                 self.publish_joint_trajectory(list(self.trajectory_buffer), speed_percentage=100.0)
         elif not any_axis_active and self.is_joystick_idle:
@@ -120,12 +127,12 @@ class JointTrajectoryController(BaseController):
         trajectory_msg = JointTrajectory()
         trajectory_msg.joint_names = joint_names
 
-        # Erzeuge eine Trajektorie mit mehreren Punkten
+        # Generate a trajectory with multiple points
         for i, target_positions in enumerate(trajectory_points):
             point = JointTrajectoryPoint()
             point.positions = target_positions
 
-            # Zeitintervall zwischen Punkten anpassen (kleine Werte für schnelles Updaten)
+            # Adjust time interval between points (small values for fast updates)
             time_seconds = (40.0 / speed_percentage) * (i + 1) / len(trajectory_points)
             point.time_from_start.sec = int(math.floor(time_seconds))
             point.time_from_start.nanosec = int((time_seconds - point.time_from_start.sec) * 1e9)

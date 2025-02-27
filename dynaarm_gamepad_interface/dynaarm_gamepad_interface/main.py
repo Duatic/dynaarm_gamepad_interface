@@ -11,10 +11,13 @@ from controller_manager_msgs.srv import ListControllers, SwitchController
 from transitions import Machine
 
 # Import controller classes dynamically
-from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import JointTrajectoryController
+from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
+    JointTrajectoryController,
+)
 from dynaarm_gamepad_interface.controllers.position_controller import PositionController
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
+
 
 class GamepadBase(Node):
     """Handles state switching, controller management, and gamepad input using a state machine."""
@@ -28,11 +31,15 @@ class GamepadBase(Node):
     }
 
     def __init__(self):
-        super().__init__('gamepad_base')
+        super().__init__("gamepad_base")
 
         # Load gamepad mappings from YAML
-        config_path = os.path.join(get_package_share_directory('dynaarm_gamepad_interface'), 'config', 'gamepad_config.yaml')
-        with open(config_path, 'r') as file:
+        config_path = os.path.join(
+            get_package_share_directory("dynaarm_gamepad_interface"),
+            "config",
+            "gamepad_config.yaml",
+        )
+        with open(config_path) as file:
             config = yaml.safe_load(file)["gamepad_node"]["ros__parameters"]
 
         # Load configurations
@@ -44,10 +51,12 @@ class GamepadBase(Node):
 
         # Extract controller states & whitelist from config
         self.states = list(self.controllers_config.keys())  # Use controller names as states
-        self.controller_whitelist = [name for name, props in self.controllers_config.items() if props["whitelisted"]]
+        self.controller_whitelist = [
+            name for name, props in self.controllers_config.items() if props["whitelisted"]
+        ]
 
         # Track active controller index
-        self.current_controller_index = 0 
+        self.current_controller_index = 0
 
         # Initialize state machine with dynamically loaded states
         self.machine = Machine(model=self, states=self.states, initial="no_control")
@@ -58,7 +67,9 @@ class GamepadBase(Node):
             if controller_name in self.CONTROLLER_CLASS_MAP:
                 self.controllers[controller_name] = self.CONTROLLER_CLASS_MAP[controller_name](self)
             else:
-                self.get_logger().warn(f"Controller '{controller_name}' is in whitelist but has no mapped class.")
+                self.get_logger().warn(
+                    f"Controller '{controller_name}' is in whitelist but has no mapped class."
+                )
 
         self.get_logger().info(f"Loaded controllers: {list(self.controllers.keys())}")
 
@@ -66,22 +77,26 @@ class GamepadBase(Node):
         self.joint_states = {}
 
         # Subscribers
-        self.create_subscription(Joy, '/joy', self.joy_callback, 10)
-        self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 10)
+        self.create_subscription(Joy, "/joy", self.joy_callback, 10)
+        self.create_subscription(JointState, "/joint_states", self.joint_state_callback, 10)
 
         # Clients
-        self.controller_client = self.create_client(ListControllers, '/controller_manager/list_controllers')
-        self.switch_controller_client = self.create_client(SwitchController, '/controller_manager/switch_controller')
+        self.controller_client = self.create_client(
+            ListControllers, "/controller_manager/list_controllers"
+        )
+        self.switch_controller_client = self.create_client(
+            SwitchController, "/controller_manager/switch_controller"
+        )
 
         self.timer = self.create_timer(1.0, self.check_active_controllers)
-  
+
         self.last_menu_button_state = 0  # Prevents repeated activation on button hold
 
         self.get_logger().info(f"GamepadBase Node started in mode: {self.state}")
 
     def joint_state_callback(self, msg: JointState):
         """Update stored joint states when a new message is received."""
-        self.joint_states = dict(zip(msg.name, msg.position))  # Store as dictionary        
+        self.joint_states = dict(zip(msg.name, msg.position))  # Store as dictionary
         self.get_logger().debug("Received joint state update.", throttle_duration_sec=5.0)
 
     def joy_callback(self, msg: Joy):
@@ -92,7 +107,7 @@ class GamepadBase(Node):
             self.get_logger().debug(f"Pressed buttons: {pressed_buttons}")
 
         # Use dynamically loaded menu button index
-        switch_controller_index = self.button_mapping["switch_controller"]        
+        switch_controller_index = self.button_mapping["switch_controller"]
         # Ensure switching happens only on button press (down event) and not while held down
         if msg.buttons[switch_controller_index] == 1 and self.last_menu_button_state == 0:
             self.switch_to_next_controller()
@@ -103,24 +118,28 @@ class GamepadBase(Node):
         if self.last_menu_button_state:
             # TODO Hold current position?
             return
-        
+
         self.process_input(msg)
 
     def process_input(self, joy_msg: Joy):
         """Dispatch joystick input to the active controller."""
         active_controller = self.state  # Current state from the state machine
-        
-        if active_controller == 'no_control':
-            self.get_logger().warn(f"No controller active.", throttle_duration_sec=20.0)
+
+        if active_controller == "no_control":
+            self.get_logger().warn("No controller active.", throttle_duration_sec=20.0)
         elif active_controller in self.controllers:
             self.controllers[active_controller].process_input(joy_msg)
         else:
-            self.get_logger().warn(f"Unknown control mode: {active_controller}", throttle_duration_sec=20.0)
+            self.get_logger().warn(
+                f"Unknown control mode: {active_controller}", throttle_duration_sec=20.0
+            )
 
     def switch_to_next_controller(self):
         """Switch to the next available controller in the whitelist."""
         if not self.switch_controller_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().warn("SwitchController service not available.", throttle_duration_sec=10.0)
+            self.get_logger().warn(
+                "SwitchController service not available.", throttle_duration_sec=10.0
+            )
             return
 
         new_controller_index = (self.current_controller_index + 1) % len(self.controller_whitelist)
@@ -132,7 +151,7 @@ class GamepadBase(Node):
 
         req = SwitchController.Request()
         req.activate_controllers = [new_controller]
-        req.deactivate_controllers = list()        
+        req.deactivate_controllers = list()
         if self.state != "no_control":
             req.deactivate_controllers.append(self.state)
         req.strictness = 1  # BEST EFFORT mode
@@ -145,16 +164,22 @@ class GamepadBase(Node):
                 if response.ok:
                     self.check_active_controllers()  # Update state machine
                 else:
-                    self.get_logger().error(f"Failed to switch to {new_controller}", throttle_duration_sec=10.0)
+                    self.get_logger().error(
+                        f"Failed to switch to {new_controller}", throttle_duration_sec=10.0
+                    )
             except Exception as e:
-                self.get_logger().error(f"Error switching controllers: {e}", throttle_duration_sec=10.0)
+                self.get_logger().error(
+                    f"Error switching controllers: {e}", throttle_duration_sec=10.0
+                )
 
         future.add_done_callback(callback)
 
     def check_active_controllers(self):
         """Checks which controllers are active and updates the state machine."""
         if not self.controller_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().warn("Controller manager service not available.", throttle_duration_sec=10.0)
+            self.get_logger().warn(
+                "Controller manager service not available.", throttle_duration_sec=10.0
+            )
             return
 
         req = ListControllers.Request()
@@ -166,42 +191,52 @@ class GamepadBase(Node):
 
                 # Filter only whitelisted active controllers
                 active_controllers = {
-                    controller.name for controller in response.controller
+                    controller.name
+                    for controller in response.controller
                     if controller.state == "active" and controller.name in self.controller_whitelist
                 }
 
                 # Check if `freeze_controller` (E-Stop) is active, even though it's NOT in the whitelist
-                is_freeze_active = any(controller.name == "freeze_controller" and controller.state == "active"
-                                    for controller in response.controller)
+                is_freeze_active = any(
+                    controller.name == "freeze_controller" and controller.state == "active"
+                    for controller in response.controller
+                )
 
                 if is_freeze_active:
                     self.get_logger().warn(
                         "       ⚠️   Emergency stop is ACTIVE!   ⚠️           \n"
-                        "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s.", 
-                    throttle_duration_sec=60.0)
+                        "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s.",
+                        throttle_duration_sec=60.0,
+                    )
 
                 # Update state machine based on the active controller
-                if active_controllers:                    
+                if active_controllers:
                     new_state = next(iter(active_controllers))  # Get first active controller
-                    if new_state in self.machine.states and \
-                        self.state not in active_controllers:
+                    if new_state in self.machine.states and self.state not in active_controllers:
                         self.get_logger().info(f"Switched controller to: {new_state}")
-                        self.machine.set_state(new_state)                                               
+                        self.machine.set_state(new_state)
 
                         # Update the current_controller_index to match the new state
                         if new_state in self.controller_whitelist:
-                            self.current_controller_index = self.controller_whitelist.index(new_state)
+                            self.current_controller_index = self.controller_whitelist.index(
+                                new_state
+                            )
 
                 else:
                     if self.state != "no_control":
-                        self.get_logger().info("No active controller found. Switching to NO_CONTROL.")
+                        self.get_logger().info(
+                            "No active controller found. Switching to NO_CONTROL."
+                        )
                         self.machine.set_state("no_control")
                         self.current_controller_index = -1
 
             except Exception as e:
-                self.get_logger().error(f"Failed to list controllers: {e}", throttle_duration_sec=10.0)
+                self.get_logger().error(
+                    f"Failed to list controllers: {e}", throttle_duration_sec=10.0
+                )
 
         future.add_done_callback(callback)
+
 
 def main(args=None):
     rclpy.init(args=args)
@@ -213,5 +248,6 @@ def main(args=None):
     node.destroy_node()
     rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
