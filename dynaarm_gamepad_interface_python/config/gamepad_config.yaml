@@ -23,12 +23,13 @@
 # 13  = DPad left
 # 14  = DPad right
 
-gamepad_receiver_node:
+gamepad_node:
   ros__parameters:
     button_mapping:
       move_home: 2
       wrist_rotation_left: 7
       wrist_rotation_right: 8
+      switch_controller: 6  # Menu button for switching controllers
     axis_mapping:
       left_joystick:
         x: 0
@@ -40,9 +41,14 @@ gamepad_receiver_node:
         left: 4
         right: 5
 
-gamepad_handler_node:
-  ros__parameters:
-    controller_whitelist:
-      - freedrive_controller
-      - joint_trajectory_controller
-      - cartesian_motion_controller
+    controllers:
+      no_control:
+        whitelisted: false
+      cartesian_motion_controller:
+        whitelisted: true
+      joint_trajectory_controller:
+        whitelisted: true
+      position_controller:
+        whitelisted: true
+      freedrive_controller:
+        whitelisted: true
