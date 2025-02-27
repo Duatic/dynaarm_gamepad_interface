@@ -1,8 +1,32 @@
+# Copyright 2025 Duatic AG
+#
+# Redistribution and use in source and binary forms, with or without modification, are permitted provided that
+# the following conditions are met:
+#
+# 1. Redistributions of source code must retain the above copyright notice, this list of conditions, and
+#    the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions, and
+#    the following disclaimer in the documentation and/or other materials provided with the distribution.
+#
+# 3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or
+#    promote products derived from this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+# WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR
+# ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+# TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 import math
 import time
 from collections import deque
+
 
 class JointTrajectoryController(BaseController):
     """Handles joint trajectory control using the gamepad"""
@@ -29,7 +53,7 @@ class JointTrajectoryController(BaseController):
         joint_states = self.get_joint_states()
         if joint_states:
             self.commanded_positions = list(joint_states.values())
-            self.initial_positions_set = True            
+            self.initial_positions_set = True
 
     def process_input(self, joy_msg):
         """Processes joystick input and updates joint positions."""
@@ -37,7 +61,9 @@ class JointTrajectoryController(BaseController):
 
         joint_states = self.get_joint_states()
         if not joint_states:
-            self.node.get_logger().warn("No joint states available. Cannot process input.", throttle_duration_sec=5.0)
+            self.node.get_logger().warn(
+                "No joint states available. Cannot process input.", throttle_duration_sec=5.0
+            )
             return
 
         joint_names = list(joint_states.keys())  # Extract joint names
@@ -46,7 +72,7 @@ class JointTrajectoryController(BaseController):
         # Initialize commanded_positions with current positions on first run
         if not self.initial_positions_set:
             self.commanded_positions = current_positions[:]
-            self.initial_positions_set = True            
+            self.initial_positions_set = True
 
         any_axis_active = False
         displacement_scale = 0.005  # Small step size for precise control
@@ -96,7 +122,9 @@ class JointTrajectoryController(BaseController):
         if any_axis_active:
             self.is_joystick_idle = False
             if len(self.trajectory_buffer) == self.trajectory_buffer.maxlen:
-                self.publish_joint_trajectory(list(self.trajectory_buffer), speed_percentage=85.0)  # Faster updates
+                self.publish_joint_trajectory(
+                    list(self.trajectory_buffer), speed_percentage=85.0
+                )  # Faster updates
             self.last_command_time = time.time()
         elif not any_axis_active and not self.is_joystick_idle:
             # Send hold command with zero velocity & acceleration
@@ -141,7 +169,7 @@ class JointTrajectoryController(BaseController):
         self.node.get_logger().debug(f"Published Smooth Joint Trajectory: {trajectory_points[-1]}")
 
     def send_hold_trajectory(self):
-        """Sends a trajectory with zero velocity & acceleration to hold position."""       
+        """Sends a trajectory with zero velocity & acceleration to hold position."""
 
         joint_names = list(self.get_joint_states().keys())
         if not joint_names:
