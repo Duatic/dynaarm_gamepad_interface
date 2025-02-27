@@ -24,6 +24,13 @@ class JointTrajectoryController(BaseController):
         # FIFO queue for smooth motion
         self.trajectory_buffer = deque(maxlen=10)
 
+    def reset(self):
+        """Reset commanded positions to current joint states on activation."""
+        joint_states = self.get_joint_states()
+        if joint_states:
+            self.commanded_positions = list(joint_states.values())
+            self.initial_positions_set = True            
+
     def process_input(self, joy_msg):
         """Processes joystick input and updates joint positions."""
         super().process_input(joy_msg)  # Base logging logic
@@ -39,8 +46,7 @@ class JointTrajectoryController(BaseController):
         # Initialize commanded_positions with current positions on first run
         if not self.initial_positions_set:
             self.commanded_positions = current_positions[:]
-            self.initial_positions_set = True
-            self.node.get_logger().info("Initialized commanded positions with current joint states.")
+            self.initial_positions_set = True            
 
         any_axis_active = False
         displacement_scale = 0.005  # Small step size for precise control

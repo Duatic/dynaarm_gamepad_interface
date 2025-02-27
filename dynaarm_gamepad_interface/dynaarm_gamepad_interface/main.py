@@ -145,10 +145,6 @@ class GamepadBase(Node):
         new_controller_index = (self.current_controller_index + 1) % len(self.controller_whitelist)
         new_controller = self.controller_whitelist[new_controller_index]
 
-        # Reset log for new controller before switching
-        if new_controller in self.controllers:
-            self.controllers[new_controller].reset_log()
-
         req = SwitchController.Request()
         req.activate_controllers = [new_controller]
         req.deactivate_controllers = list()
@@ -215,6 +211,7 @@ class GamepadBase(Node):
                     if new_state in self.machine.states and self.state not in active_controllers:
                         self.get_logger().info(f"Switched controller to: {new_state}")
                         self.machine.set_state(new_state)
+                        self.controllers[new_state].reset()
 
                         # Update the current_controller_index to match the new state
                         if new_state in self.controller_whitelist:

@@ -13,12 +13,6 @@ class BaseController:
         """Override this in child classes."""
         pass
 
-    def reset_log(self):
-        """Reset log state when the controller is switched."""
-        self.log_printed = False
-
-    def log_activation(self, message):
-        """Log activation message once per activation."""
-        if not self.log_printed:
-            self.node.get_logger().info(message)
-            self.log_printed = True
+    def reset(self):
+        """Reset controller state when switching back to this controller."""
+        self.log_printed = False  # Reset logging state

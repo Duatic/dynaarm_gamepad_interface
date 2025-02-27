@@ -1,7 +1,6 @@
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from std_msgs.msg import Float64MultiArray
 
-
 class PositionController(BaseController):
     """Handles position control using the gamepad"""
 
@@ -13,9 +12,16 @@ class PositionController(BaseController):
             Float64MultiArray, "/position_controller/commands", 10
         )
 
-        self.is_joystick_idle = True  # Track joystick idle state
         self.initial_positions_set = False  # Flag to check if initial positions are set
+        self.is_joystick_idle = True  # Track joystick idle state
         self.commanded_positions = []  # Stores the current commanded positions
+
+    def reset(self):
+        """Reset commanded positions to current joint states on activation."""
+        joint_states = self.get_joint_states()
+        if joint_states:
+            self.commanded_positions = list(joint_states.values())
+            self.initial_positions_set = True          
 
     def process_input(self, joy_msg):
         """Processes joystick input and updates joint positions."""
@@ -34,10 +40,7 @@ class PositionController(BaseController):
         # Initialize commanded_positions with current positions on first run
         if not self.initial_positions_set:
             self.commanded_positions = current_positions[:]
-            self.initial_positions_set = True
-            self.node.get_logger().info(
-                "Initialized commanded positions with current joint states."
-            )
+            self.initial_positions_set = True      
 
         any_axis_active = False
         displacement_scale = 0.005  # Scale for joystick movement sensitivity
