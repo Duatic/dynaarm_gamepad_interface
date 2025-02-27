@@ -1,7 +1,7 @@
 import os
 from setuptools import find_packages, setup
 
-package_name = 'dynaarm_gamepad_interface_python'
+package_name = 'dynaarm_gamepad_interface'
 
 setup(
     name=package_name,
@@ -21,7 +21,7 @@ setup(
     license='BSD-3-Clause',
     entry_points={
         'console_scripts': [
-            'gamepad_interface = dynaarm_gamepad_interface_python.main:main'
+            'gamepad_interface = dynaarm_gamepad_interface.main:main'
         ],
     },    
 )

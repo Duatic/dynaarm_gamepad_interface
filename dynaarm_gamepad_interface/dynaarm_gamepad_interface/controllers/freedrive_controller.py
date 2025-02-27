@@ -1,4 +1,4 @@
-from .base_controller import BaseController
+from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 
 class FreedriveController(BaseController):
     """Handles freedrive mode."""

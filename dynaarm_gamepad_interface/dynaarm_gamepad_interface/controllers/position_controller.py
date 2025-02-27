@@ -1,4 +1,4 @@
-from .base_controller import BaseController
+from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from std_msgs.msg import Float64MultiArray
 
 class PositionController(BaseController):

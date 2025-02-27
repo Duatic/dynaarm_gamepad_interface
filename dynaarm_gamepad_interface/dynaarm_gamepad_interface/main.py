@@ -11,10 +11,10 @@ from controller_manager_msgs.srv import ListControllers, SwitchController
 from transitions import Machine
 
 # Import controller classes dynamically
-from dynaarm_gamepad_interface_python.controllers.joint_trajectory_controller import JointTrajectoryController
-from dynaarm_gamepad_interface_python.controllers.position_controller import PositionController
-from dynaarm_gamepad_interface_python.controllers.cartesian_controller import CartesianController
-from dynaarm_gamepad_interface_python.controllers.freedrive_controller import FreedriveController
+from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import JointTrajectoryController
+from dynaarm_gamepad_interface.controllers.position_controller import PositionController
+from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
+from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
 
 class GamepadBase(Node):
     """Handles state switching, controller management, and gamepad input using a state machine."""
@@ -31,7 +31,7 @@ class GamepadBase(Node):
         super().__init__('gamepad_base')
 
         # Load gamepad mappings from YAML
-        config_path = os.path.join(get_package_share_directory('dynaarm_gamepad_interface_python'), 'config', 'gamepad_config.yaml')
+        config_path = os.path.join(get_package_share_directory('dynaarm_gamepad_interface'), 'config', 'gamepad_config.yaml')
         with open(config_path, 'r') as file:
             config = yaml.safe_load(file)["gamepad_node"]["ros__parameters"]
 
