@@ -4,7 +4,6 @@ import math
 import time
 from collections import deque
 
-
 class JointTrajectoryController(BaseController):
     """Handles joint trajectory control using the gamepad"""
 
@@ -22,8 +21,8 @@ class JointTrajectoryController(BaseController):
         self.active_axes = {}  # Track active joystick axes (to detect when they go to 0)
         self.last_command_time = time.time()  # Track last command time
 
-        # FIFO queue for smooth movements (more points, but controlled delay)
-        self.trajectory_buffer = deque(maxlen=15)
+        # FIFO queue for smooth motion
+        self.trajectory_buffer = deque(maxlen=10)
 
     def process_input(self, joy_msg):
         """Processes joystick input and updates joint positions."""
@@ -31,9 +30,7 @@ class JointTrajectoryController(BaseController):
 
         joint_states = self.get_joint_states()
         if not joint_states:
-            self.node.get_logger().warn(
-                "No joint states available. Cannot process input.", throttle_duration_sec=5.0
-            )
+            self.node.get_logger().warn("No joint states available. Cannot process input.", throttle_duration_sec=5.0)
             return
 
         joint_names = list(joint_states.keys())  # Extract joint names
@@ -43,20 +40,18 @@ class JointTrajectoryController(BaseController):
         if not self.initial_positions_set:
             self.commanded_positions = current_positions[:]
             self.initial_positions_set = True
-            self.node.get_logger().info(
-                "Initialized commanded positions with current joint states."
-            )
+            self.node.get_logger().info("Initialized commanded positions with current joint states.")
 
         any_axis_active = False
-        displacement_scale = 0.004  # Even smaller step size for sensitive control
-        deadzone = 0.08  # Smaller deadzone to allow fine movements
-        max_step = 0.008  # Smaller maximum step size
+        displacement_scale = 0.005  # Small step size for precise control
+        deadzone = 0.08  # Smaller deadzone to allow finer movements
+        max_step = 0.008  # Limit maximum step size
 
         # Process each joint based on gamepad axis input
         for i, joint_name in enumerate(joint_names):
             axis_val = 0.0
 
-            # Map axes to specific joints
+            # Map joystick axes to specific joints
             if i == 0 and len(joy_msg.axes) > self.node.axis_mapping["left_joystick"]["x"]:
                 axis_val = joy_msg.axes[self.node.axis_mapping["left_joystick"]["x"]]
             elif i == 1 and len(joy_msg.axes) > self.node.axis_mapping["left_joystick"]["y"]:
@@ -70,18 +65,18 @@ class JointTrajectoryController(BaseController):
                 right_trigger = joy_msg.axes[self.node.axis_mapping["triggers"]["right"]]
                 axis_val = right_trigger - left_trigger
 
-            # If the axis became inactive, set the target to the current position
+            # Detect when axis was previously active but now inactive (reset position)
             if abs(axis_val) < deadzone and self.active_axes.get(i, False):
                 joint_states = self.get_joint_states()
                 current_positions = list(joint_states.values())
                 self.commanded_positions[i] = current_positions[i]
 
-            # Update command if the axis is active, but limit with max_step
+            # Update commanded position if axis is active, but limit step size
             if abs(axis_val) > deadzone:
                 target_position = self.commanded_positions[i] + axis_val * displacement_scale
                 delta = target_position - self.commanded_positions[i]
                 if abs(delta) > max_step:
-                    delta = max_step * math.copysign(1, delta)  # Limit change to max_step
+                    delta = max_step * math.copysign(1, delta)  # Limit step size
                 self.commanded_positions[i] += delta
 
                 any_axis_active = True
@@ -89,23 +84,18 @@ class JointTrajectoryController(BaseController):
             else:
                 self.active_axes[i] = False  # Mark axis as inactive
 
-        # **Use FIFO queue for smooth movement**
+        # Use FIFO queue for smooth movement
         self.trajectory_buffer.append(list(self.commanded_positions))
 
         if any_axis_active:
             self.is_joystick_idle = False
             if len(self.trajectory_buffer) == self.trajectory_buffer.maxlen:
-                self.publish_joint_trajectory(
-                    list(self.trajectory_buffer), speed_percentage=85.0
-                )  # Higher rate
+                self.publish_joint_trajectory(list(self.trajectory_buffer), speed_percentage=85.0)  # Faster updates
             self.last_command_time = time.time()
         elif not any_axis_active and not self.is_joystick_idle:
-            if time.time() - self.last_command_time > 0.05:  # Very short delay
-                self.publish_joint_trajectory(list(self.trajectory_buffer), speed_percentage=85.0)
-                self.is_joystick_idle = True
-                # **Send final stabilizing signal**
-                self.trajectory_buffer.appendleft(self.commanded_positions[:])
-                self.publish_joint_trajectory(list(self.trajectory_buffer), speed_percentage=100.0)
+            # Send hold command with zero velocity & acceleration
+            self.send_hold_trajectory()
+            self.is_joystick_idle = True
         elif not any_axis_active and self.is_joystick_idle:
             self.last_command_time = time.time()
 
@@ -127,10 +117,12 @@ class JointTrajectoryController(BaseController):
         trajectory_msg = JointTrajectory()
         trajectory_msg.joint_names = joint_names
 
-        # Generate a trajectory with multiple points
+        # Generate trajectory with multiple points
         for i, target_positions in enumerate(trajectory_points):
             point = JointTrajectoryPoint()
             point.positions = target_positions
+            point.velocities = [0.0] * len(joint_names)  # Set velocity to zero
+            point.accelerations = [0.0] * len(joint_names)  # Set acceleration to zero
 
             # Adjust time interval between points (small values for fast updates)
             time_seconds = (40.0 / speed_percentage) * (i + 1) / len(trajectory_points)
@@ -141,3 +133,23 @@ class JointTrajectoryController(BaseController):
 
         self.joint_trajectory_publisher.publish(trajectory_msg)
         self.node.get_logger().debug(f"Published Smooth Joint Trajectory: {trajectory_points[-1]}")
+
+    def send_hold_trajectory(self):
+        """Sends a trajectory with zero velocity & acceleration to hold position."""       
+
+        joint_names = list(self.get_joint_states().keys())
+        if not joint_names:
+            self.node.get_logger().error("No joint names available. Cannot send hold trajectory.")
+            return
+
+        hold_trajectory = JointTrajectory()
+        hold_trajectory.joint_names = joint_names
+
+        point = JointTrajectoryPoint()
+        point.positions = self.commanded_positions[:]  # Keep the last commanded position
+        point.velocities = [0.0] * len(joint_names)  # Set velocity to zero
+        point.accelerations = [0.0] * len(joint_names)  # Set acceleration to zero
+        point.time_from_start.sec = 0  # Immediate effect
+
+        hold_trajectory.points.append(point)
+        self.joint_trajectory_publisher.publish(hold_trajectory)
