@@ -34,6 +34,7 @@ from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Float64MultiArray
 
 from dynaarm_gamepad_interface.controller_manager import ControllerManager
+from dynaarm_gamepad_interface.gamepad_feedback import GamepadFeedback
 
 
 class GamepadInterface(Node):
@@ -74,6 +75,7 @@ class GamepadInterface(Node):
         self.get_logger().info(f"Loaded gamepad config: {self.button_mapping}, {self.axis_mapping}")
 
         self.controller_manager = ControllerManager(self, config["controllers"])
+        self.gamepad_feedback = GamepadFeedback(self)
         
         self.create_timer(self.dt, self.process_joy_input)
         self.get_logger().info("Gamepad Interface Initialized.")

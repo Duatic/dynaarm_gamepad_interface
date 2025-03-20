@@ -91,8 +91,10 @@ class PositionController(BaseController):
                 offset = self.commanded_positions[i] - current_position
                 if offset > self.node.joint_pos_offset_tolerance:                    
                     self.commanded_positions[i] = current_position + self.node.joint_pos_offset_tolerance
+                    self.node.gamepad_feedback.send_feedback(intensity=1.0)
                 elif offset < -self.node.joint_pos_offset_tolerance:                    
                     self.commanded_positions[i] = current_position - self.node.joint_pos_offset_tolerance
+                    self.node.gamepad_feedback.send_feedback(intensity=1.0)
 
                 any_axis_active = True
 
