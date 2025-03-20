@@ -23,18 +23,19 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from rclpy.node import Node
 
 from controller_manager_msgs.srv import ListControllers, SwitchController
 
-# Import controller classes dynamically
-from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import JointTrajectoryController
+
+from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
+    JointTrajectoryController,
+)
 from dynaarm_gamepad_interface.controllers.position_controller import PositionController
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
 
 
-class ControllerManager():
+class ControllerManager:
     """Handle controllers"""
 
     # Controller name → Class mapping
@@ -52,8 +53,12 @@ class ControllerManager():
         self.current_controller_index = -1
         self.current_active_controller = None
 
-        self.controller_client = self.node.create_client(ListControllers, "/controller_manager/list_controllers")
-        self.switch_controller_client = self.node.create_client(SwitchController, "/controller_manager/switch_controller")
+        self.controller_client = self.node.create_client(
+            ListControllers, "/controller_manager/list_controllers"
+        )
+        self.switch_controller_client = self.node.create_client(
+            SwitchController, "/controller_manager/switch_controller"
+        )
 
         # Extract controller states & whitelist from config
         self.states = list(controllers_config.keys())  # Use controller names as states
@@ -64,7 +69,9 @@ class ControllerManager():
         # Instantiate controllers dynamically
         for controller_name in self.controller_whitelist:
             if controller_name in self.CONTROLLER_CLASS_MAP:
-                self.controllers[controller_name] = self.CONTROLLER_CLASS_MAP[controller_name](self.node)
+                self.controllers[controller_name] = self.CONTROLLER_CLASS_MAP[controller_name](
+                    self.node
+                )
             else:
                 self.node.get_logger().warn(
                     f"Controller '{controller_name}' is in whitelist but has no mapped class."
@@ -113,21 +120,27 @@ class ControllerManager():
                         "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s.",
                         throttle_duration_sec=60.0,
                     )
-                
+
                 if active_controllers:
-                    
-                    # Get first active controller                                      
+
+                    # Get first active controller
                     current_active_controller = next(iter(active_controllers))
                     if current_active_controller in self.controller_whitelist:
-                        active_controller_index = self.controller_whitelist.index(current_active_controller)
+                        active_controller_index = self.controller_whitelist.index(
+                            current_active_controller
+                        )
                         if self.current_controller_index != active_controller_index:
                             self.controllers[current_active_controller].reset()
                             self.current_controller_index = active_controller_index
-                            self.current_active_controller = current_active_controller                            
-                            self.node.get_logger().info(f"New active controller: {current_active_controller}")
+                            self.current_active_controller = current_active_controller
+                            self.node.get_logger().info(
+                                f"New active controller: {current_active_controller}"
+                            )
                 else:
-                    self.node.get_logger().warn("No active controller found.", throttle_duration_sec=30.0)
-                    self.current_controller_index = -1                        
+                    self.node.get_logger().warn(
+                        "No active controller found.", throttle_duration_sec=30.0
+                    )
+                    self.current_controller_index = -1
 
             except Exception as e:
                 self.node.get_logger().error(
@@ -148,8 +161,8 @@ class ControllerManager():
         new_controller = self.controller_whitelist[new_controller_index]
 
         req = SwitchController.Request()
-        req.activate_controllers = [new_controller]        
-        req.deactivate_controllers = list()       
+        req.activate_controllers = [new_controller]
+        req.deactivate_controllers = list()
         if self.current_controller_index >= 0:
             req.deactivate_controllers.append(self.current_active_controller)
         req.strictness = 1

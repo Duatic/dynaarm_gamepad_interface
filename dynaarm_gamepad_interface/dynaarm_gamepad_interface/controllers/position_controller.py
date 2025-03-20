@@ -35,7 +35,7 @@ class PositionController(BaseController):
         self.position_command_publisher = self.node.create_publisher(
             Float64MultiArray, "/position_controller/commands", 10
         )
-        
+
         self.is_joystick_idle = True  # Track joystick idle state
         self.commanded_positions = []  # Stores the current commanded positions
 
@@ -44,12 +44,11 @@ class PositionController(BaseController):
         joint_states = self.get_joint_states()
         if joint_states:
             self.commanded_positions = list(joint_states.values())
-            self.initial_positions_set = True
 
     def process_input(self, msg):
         """Processes joystick input and updates joint positions."""
-        super().process_input(msg) 
-        
+        super().process_input(msg)
+
         joint_names = list(self.node.joint_states.keys())
 
         any_axis_active = False
@@ -66,16 +65,15 @@ class PositionController(BaseController):
             elif i == 2 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["y"]:
                 axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["y"]]
             elif i == 3 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["x"]:
-                axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["x"]]                
+                axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["x"]]
             elif i == 4:
                 left_trigger = msg.axes[self.node.axis_mapping["triggers"]["left"]]
                 right_trigger = msg.axes[self.node.axis_mapping["triggers"]["right"]]
                 axis_val = right_trigger - left_trigger
             elif i == 5:
-                move_left = (self.node.button_mapping["wrist_rotation_left"] < len(msg.buttons)
-                             and msg.buttons[self.node.button_mapping["wrist_rotation_left"]] == 1)
-                move_right = (self.node.button_mapping["wrist_rotation_right"] < len(msg.buttons)
-                              and msg.buttons[self.node.button_mapping["wrist_rotation_right"]] == 1)
+                move_left = msg.buttons[self.node.button_mapping["wrist_rotation_left"]] == 1
+                move_right = msg.buttons[self.node.button_mapping["wrist_rotation_right"]] == 1
+
                 if move_left and not move_right:
                     axis_val = -1.0
                 elif move_right and not move_left:
@@ -85,15 +83,19 @@ class PositionController(BaseController):
             if abs(axis_val) > deadzone:
                 current_position = self.node.joint_states[joint_name]
 
-                self.commanded_positions[i] += axis_val * self.node.dt 
+                self.commanded_positions[i] += axis_val * self.node.dt
 
                 # Clamp the offset between the commanded and current positions:
                 offset = self.commanded_positions[i] - current_position
-                if offset > self.node.joint_pos_offset_tolerance:                    
-                    self.commanded_positions[i] = current_position + self.node.joint_pos_offset_tolerance
+                if offset > self.node.joint_pos_offset_tolerance:
+                    self.commanded_positions[i] = (
+                        current_position + self.node.joint_pos_offset_tolerance
+                    )
                     self.node.gamepad_feedback.send_feedback(intensity=1.0)
-                elif offset < -self.node.joint_pos_offset_tolerance:                    
-                    self.commanded_positions[i] = current_position - self.node.joint_pos_offset_tolerance
+                elif offset < -self.node.joint_pos_offset_tolerance:
+                    self.commanded_positions[i] = (
+                        current_position - self.node.joint_pos_offset_tolerance
+                    )
                     self.node.gamepad_feedback.send_feedback(intensity=1.0)
 
                 any_axis_active = True

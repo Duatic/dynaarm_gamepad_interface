@@ -34,31 +34,33 @@ from sensor_msgs.msg import Joy, JointState
 from std_msgs.msg import Float64MultiArray
 
 from dynaarm_gamepad_interface.controller_manager import ControllerManager
-from dynaarm_gamepad_interface.gamepad_feedback import GamepadFeedback
+from dynaarm_gamepad_interface.utils.gamepad_feedback import GamepadFeedback
 
 
 class GamepadInterface(Node):
     """Processes joystick input"""
-    
+
     def __init__(self):
         super().__init__("gamepad_interface")
-        
+
         self.joint_states = {}
         self.initial_positions_set = False
         self.commanded_positions = []
         self.is_joystick_idle = True
-        self.joint_pos_offset_tolerance = 0.1        
-        self.dt = 0.0005        
+        self.joint_pos_offset_tolerance = 0.1
+        self.dt = 0.0005
         self.latest_joy_msg = None
         self.joy_lock = threading.Lock()
-        self.last_menu_button_state = 0 
+        self.last_menu_button_state = 0
 
         # Publisher for sending position commands
-        self.position_pub = self.create_publisher(Float64MultiArray, "/position_controller/commands", 10)
+        self.position_pub = self.create_publisher(
+            Float64MultiArray, "/position_controller/commands", 10
+        )
 
         # Subscribers
         self.create_subscription(Joy, "/joy", self.joy_callback, 10)
-        self.create_subscription(JointState, "/joint_states", self.joint_state_callback, 10)        
+        self.create_subscription(JointState, "/joint_states", self.joint_state_callback, 10)
 
         # Load gamepad mappings from YAML
         config_path = os.path.join(
@@ -71,12 +73,12 @@ class GamepadInterface(Node):
 
         # Load configurations
         self.button_mapping = config["button_mapping"]
-        self.axis_mapping = config["axis_mapping"]        
+        self.axis_mapping = config["axis_mapping"]
         self.get_logger().info(f"Loaded gamepad config: {self.button_mapping}, {self.axis_mapping}")
 
         self.controller_manager = ControllerManager(self, config["controllers"])
         self.gamepad_feedback = GamepadFeedback(self)
-        
+
         self.create_timer(self.dt, self.process_joy_input)
         self.get_logger().info("Gamepad Interface Initialized.")
 
@@ -87,7 +89,7 @@ class GamepadInterface(Node):
         # Set initial commanded positions only once
         if not self.initial_positions_set and self.joint_states:
             self.commanded_positions = list(self.joint_states.values())
-            self.initial_positions_set = True            
+            self.initial_positions_set = True
 
     def joy_callback(self, msg: Joy):
         """Store latest joystick message."""
@@ -101,7 +103,7 @@ class GamepadInterface(Node):
 
         if msg is None or not self.joint_states:
             return  # Skip processing if no joystick input or no joint states
-        
+
         # Use dynamically loaded menu button index
         switch_controller_index = self.button_mapping["switch_controller"]
         # Ensure switching happens only on button press (down event) and not while held down
@@ -114,13 +116,14 @@ class GamepadInterface(Node):
         if self.last_menu_button_state:
             # TODO Hold current position?
             return
-        
+
         # Now get the current active controller from the controller manager:
         current_controller = self.controller_manager.get_current_controller()
         if current_controller is not None:
             current_controller.process_input(msg)
 
-def main(args=None):      
+
+def main(args=None):
     rclpy.init(args=args)
     node = GamepadInterface()
     try:
