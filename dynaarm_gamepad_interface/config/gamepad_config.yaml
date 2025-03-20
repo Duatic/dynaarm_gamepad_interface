@@ -44,8 +44,6 @@ gamepad_node:
     controllers:
       no_control:
         whitelisted: false
-      cartesian_motion_controller:
-        whitelisted: true
       joint_trajectory_controller:
         whitelisted: true
       position_controller:
