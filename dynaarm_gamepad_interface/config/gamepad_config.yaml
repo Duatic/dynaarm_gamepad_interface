@@ -42,8 +42,6 @@ gamepad_node:
         right: 5
 
     controllers:
-      no_control:
-        whitelisted: false
       joint_trajectory_controller:
         whitelisted: true
       position_controller:
