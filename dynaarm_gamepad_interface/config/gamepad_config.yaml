@@ -32,8 +32,8 @@ gamepad_node:
       switch_controller: 6  # Menu button for switching controllers
     axis_mapping:
       left_joystick:
-        x: 0
-        y: 1
+        x: 1
+        y: 0
       right_joystick:
         x: 2
         y: 3
@@ -47,4 +47,6 @@ gamepad_node:
       position_controller:
         whitelisted: true
       freedrive_controller:
+        whitelisted: true
+      rl_controller:
         whitelisted: true

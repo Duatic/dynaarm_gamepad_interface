@@ -35,7 +35,7 @@ setup(
         (os.path.join("share", package_name, "config"), ["config/gamepad_config.yaml"]),
         ("share/" + package_name, ["package.xml"]),
     ],
-    install_requires=["setuptools"],
+    install_requires=["setuptools", "rclpy", "std_msgs"],  # Added std_msgs for message types
     zip_safe=True,
     maintainer="Timo Schwarzer",
     maintainer_email="tschwarzer@duatic.com",

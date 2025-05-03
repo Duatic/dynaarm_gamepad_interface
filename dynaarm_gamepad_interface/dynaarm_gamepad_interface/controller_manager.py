@@ -33,6 +33,7 @@ from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
 from dynaarm_gamepad_interface.controllers.position_controller import PositionController
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
+from dynaarm_gamepad_interface.controllers.rl_controller import RlController
 
 
 class ControllerManager:
@@ -41,6 +42,7 @@ class ControllerManager:
     # Controller name → Class mapping
     CONTROLLER_CLASS_MAP = {
         "freedrive_controller": FreedriveController,
+        "rl_controller": RlController,
         "joint_trajectory_controller": JointTrajectoryController,
         "cartesian_motion_controller": CartesianController,
         "position_controller": PositionController,
