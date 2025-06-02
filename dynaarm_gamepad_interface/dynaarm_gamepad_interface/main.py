@@ -120,7 +120,11 @@ class GamepadInterface(Node):
         # Now get the current active controller from the controller manager:
         current_controller = self.controller_manager.get_current_controller()
         if current_controller is not None:
-            current_controller.process_input(msg)
+            if self.controller_manager.is_freeze_active:
+                # If freeze is active, we don't process any input                
+                current_controller.reset()
+            else:
+                current_controller.process_input(msg)
 
 
 def main(args=None):

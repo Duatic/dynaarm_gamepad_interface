@@ -52,6 +52,7 @@ class ControllerManager:
         self.controllers = {}
         self.current_controller_index = -1
         self.current_active_controller = None
+        self.is_freeze_active = True  # Assume freeze is active until proven otherwise
 
         self.controller_client = self.node.create_client(
             ListControllers, "/controller_manager/list_controllers"
@@ -109,12 +110,12 @@ class ControllerManager:
                 }
 
                 # Check if `freeze_controller` (E-Stop) is active, even though it's NOT in the whitelist
-                is_freeze_active = any(
+                self.is_freeze_active = any(
                     controller.name == "freeze_controller" and controller.state == "active"
                     for controller in response.controller
                 )
 
-                if is_freeze_active:
+                if self.is_freeze_active:
                     self.node.get_logger().warn(
                         "       ⚠️   Emergency stop is ACTIVE!   ⚠️           \n"
                         "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s.",
