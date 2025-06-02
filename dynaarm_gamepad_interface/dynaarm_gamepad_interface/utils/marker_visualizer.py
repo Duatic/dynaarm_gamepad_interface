@@ -28,6 +28,7 @@ from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import PoseStamped
 from typing import List, Optional
 
+
 @dataclass
 class MarkerProperties:
     type: int
@@ -40,12 +41,14 @@ class MarkerProperties:
     color_a: float = 1.0
     lifetime: float = 0.0
 
+
 @dataclass
 class MarkerData:
     id: int
     pose: PoseStamped
     frame: str
     properties: MarkerProperties
+
 
 class MarkerHelper:
 
@@ -73,7 +76,7 @@ class MarkerHelper:
             marker.color.a = marker_data.properties.color_a
             marker.color.r = marker_data.properties.color_r
             marker.color.g = marker_data.properties.color_g
-            marker.color.b = marker_data.properties.color_b            
+            marker.color.b = marker_data.properties.color_b
             marker_array.markers.append(marker)
 
         self.marker_publisher.publish(marker_array)
