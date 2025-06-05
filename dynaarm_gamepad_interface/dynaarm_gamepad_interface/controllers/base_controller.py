@@ -21,6 +21,9 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import rclpy
+from rclpy.parameter_client import AsyncParameterClient
+import re
 
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
@@ -28,10 +31,56 @@ class BaseController:
     def __init__(self, node):
         self.node = node
         self.log_printed = False  # Track whether the log was printed
+        self.arms_count = 0  # Count of arms, used for logging
+    
+    def get_param_values(self, controller_ns, param_name):
+        """Retrieve parameter values from the node."""
+
+        param_client = AsyncParameterClient(self.node, controller_ns)
+        future = param_client.get_parameters([param_name])
+        rclpy.spin_until_future_complete(self.node, future)
+        if future.result() is not None and future.result().values:
+            param_value = future.result().values[0]
+            joint_names = list(param_value.string_array_value)
+            return joint_names
+
+    def get_topic_names_and_types(self, by_name):
+        """ This base class retrieves topic names by a given name.
+        Args:
+            by_name (str): The name of the topic to retrieve.
+        Returns:
+            list: A list of topic names and types matching the given name.
+        """
+        
+        pattern = re.compile(by_name.replace("*", ".*"))
+        topics_and_types = self.node.get_topic_names_and_types()
+        matches = [
+            (topic, types)
+            for topic, types in topics_and_types
+            if pattern.fullmatch(topic)
+        ]
+        self.arms_count = len(matches)
+        return matches
 
     def get_joint_states(self):
-        """Retrieve latest joint positions from GamepadBase"""
-        return self.node.joint_states
+        """Always return a list of joint state dicts, one per arm."""
+        joint_states = self.node.joint_states
+        if self.arms_count <= 1:
+            return [joint_states]  # Always a list, even for single arm
+
+        # Multi-arm: split joint_states into self.arms_count chunks
+        joint_names = list(joint_states.keys())
+        values = list(joint_states.values())
+        chunk_size = len(joint_names) // self.arms_count
+        joint_states_per_arm = []
+        for i in range(self.arms_count):
+            start = i * chunk_size
+            end = (i + 1) * chunk_size
+            arm_joint_names = joint_names[start:end]
+            arm_joint_values = values[start:end]
+            arm_joint_dict = dict(zip(arm_joint_names, arm_joint_values))
+            joint_states_per_arm.append(arm_joint_dict)
+        return joint_states_per_arm
 
     def process_input(self, joy_msg):
         """Override this in child classes."""
