@@ -55,11 +55,19 @@ class JointTrajectoryController(BaseController):
 
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""
-        joint_states = self.get_joint_states()  # Should return a dict: {joint_name: position}
-        
+        joint_states_list = self.get_joint_states()  # Returns a list of dicts
+
         for topic, joint_names in self.topic_to_joint_names.items():
+            # Determine which dict to use based on topic
+            if "arm_left" in topic:
+                arm_joint_states = next((d for d in joint_states_list if any(k.startswith("arm_left") for k in d)), {})
+            elif "arm_right" in topic:
+                arm_joint_states = next((d for d in joint_states_list if any(k.startswith("arm_right") for k in d)), {})
+            else:
+                arm_joint_states = {}
+
             self.topic_to_commanded_positions[topic] = [
-                joint_states[joint] if joint in joint_states else 0.0 for joint in joint_names
+                arm_joint_states.get(joint, 0.0) for joint in joint_names
             ]                       
 
     def process_input(self, msg):
