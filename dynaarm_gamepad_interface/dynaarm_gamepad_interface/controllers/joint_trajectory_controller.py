@@ -29,11 +29,14 @@ import rclpy
 class JointTrajectoryController(BaseController):
     """Handles joint trajectory control using the gamepad"""
 
+    MIRRORED_JOINTS = {"shoulder_rotation", "forearm_rotation", "wrist_rotation"}
+
     def __init__(self, node):
         super().__init__(node)
         topic_prefix = "/joint_trajectory_controller"
         found_topics = self.get_topic_names_and_types(f"{topic_prefix}*/joint_trajectory")
 
+        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value        
         self.joint_trajectory_publishers = {}
         self.topic_to_joint_names = {}
         self.topic_to_commanded_positions = {}
@@ -52,6 +55,21 @@ class JointTrajectoryController(BaseController):
         
         self.is_joystick_idle = True  # Track joystick idle state
         self.commanded_positions = []  # Stores the current commanded positions
+
+        self.mirrored_joints = []
+        all_joint_names = []
+        for joint_names in self.topic_to_joint_names.values():
+            all_joint_names.extend(joint_names)
+        # For each base, find all matching joints
+        for base in self.MIRRORED_JOINTS:
+            matches = [name for name in all_joint_names if name.endswith(base)]
+            if len(matches) == 2:
+                # Add only one (e.g. the one with 'right' if present, else the first)
+                right = [m for m in matches if "right" in m]
+                if right:
+                    self.mirrored_joints.append(right[0])
+                else:
+                    self.mirrored_joints.append(matches[0])        
 
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""
@@ -104,6 +122,9 @@ class JointTrajectoryController(BaseController):
                     elif move_right and not move_left:
                         axis_val = 1.0
 
+                if self.mirror and joint_name in self.mirrored_joints:
+                    axis_val = -axis_val
+
                 if abs(axis_val) > deadzone:
                     current_position = self.node.joint_states.get(joint_name, 0.0)
                     commanded_positions[i] += axis_val * self.node.dt
@@ -115,6 +136,7 @@ class JointTrajectoryController(BaseController):
                         commanded_positions[i] = current_position - self.node.joint_pos_offset_tolerance
                         self.node.gamepad_feedback.send_feedback(intensity=1.0)
                     any_axis_active = True
+
 
             # Update the commanded positions for this topic
             self.topic_to_commanded_positions[topic] = commanded_positions
@@ -138,11 +160,15 @@ class JointTrajectoryController(BaseController):
                 )
             self.is_joystick_idle = True        
 
+    def get_joint_base_name(self, joint_name):
+        # Assumes joint names are like 'shoulder_rotation_arm_left'
+        return "_".join(joint_name.split("_")[:-2]) if joint_name.endswith(("_arm_left", "_arm_right")) else joint_name.rsplit("_", 1)[0]
+
     def publish_joint_trajectory(self, target_positions, publisher, joint_names=None, speed_percentage=1.0):
         """Publishes a joint trajectory message for the given positions using the provided publisher."""
         if joint_names is None:
             joint_names = list(self.node.joint_states.keys())
-        
+
         if not joint_names:
             self.node.get_logger().error("No joint names available. Cannot publish trajectory.")
             return
