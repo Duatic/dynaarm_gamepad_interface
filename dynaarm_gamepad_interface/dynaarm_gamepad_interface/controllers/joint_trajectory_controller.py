@@ -29,7 +29,7 @@ import rclpy
 class JointTrajectoryController(BaseController):
     """Handles joint trajectory control using the gamepad"""
 
-    MIRRORED_JOINTS = {"shoulder_rotation", "forearm_rotation", "wrist_rotation"}
+    MIRRORED_BASES = {"shoulder_rotation", "forearm_rotation", "wrist_rotation"}
 
     def __init__(self, node):
         super().__init__(node)
@@ -40,53 +40,60 @@ class JointTrajectoryController(BaseController):
         self.joint_trajectory_publishers = {}
         self.topic_to_joint_names = {}
         self.topic_to_commanded_positions = {}
+        self.prefix_to_joints = {}
+        self.is_joystick_idle = True
 
+        # Discover all topics and joint names, extract prefix
         for topic, types in found_topics:
             self.joint_trajectory_publishers[topic] = self.node.create_publisher(
                 JointTrajectory, topic, 10
             )
-
+            # Extract prefix from topic name
+            # e.g. /joint_trajectory_controller_arm_1/joint_trajectory -> arm_1
+            topic_parts = topic[len(topic_prefix):].split("/")
+            prefix = topic_parts[0][1:] if topic_parts[0].startswith("_") else topic_parts[0] if topic_parts[0] else ""
             joint_names = self.get_param_values(topic.split("/")[1], "joints")
             if joint_names:
                 self.topic_to_joint_names[topic] = joint_names
                 self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)
+                self.prefix_to_joints[prefix] = joint_names
             else:
-                print("Parameter not found or empty")
-        
-        self.is_joystick_idle = True  # Track joystick idle state
-        self.commanded_positions = []  # Stores the current commanded positions
+                print("Parameter not found or empty for topic", topic)
 
+        # Build mirrored joints: for each base, find all prefixes that have that joint
         self.mirrored_joints = []
-        all_joint_names = []
-        for joint_names in self.topic_to_joint_names.values():
-            all_joint_names.extend(joint_names)
-        # For each base, find all matching joints
-        for base in self.MIRRORED_JOINTS:
-            matches = [name for name in all_joint_names if name.endswith(base)]
-            if len(matches) == 2:
-                # Add only one (e.g. the one with 'right' if present, else the first)
-                right = [m for m in matches if "right" in m]
-                if right:
-                    self.mirrored_joints.append(right[0])
-                else:
-                    self.mirrored_joints.append(matches[0])        
+        for base in self.MIRRORED_BASES:
+            # Find all joints with this base, grouped by prefix
+            found = []
+            for prefix, joints in self.prefix_to_joints.items():
+                for joint in joints:
+                    # Accept both arm_1/shoulder_rotation and arm_1_shoulder_rotation
+                    if joint.endswith("/" + base) or joint.endswith("_" + base) or joint == base:
+                        found.append(joint)
+            if len(found) == 2:
+                # Pick one to mirror (e.g. the one with the "higher" prefix)
+                found_sorted = sorted(found)
+                self.mirrored_joints.append(found_sorted[1])
+        if self.mirrored_joints:
+            self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")   
 
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""
         joint_states_list = self.get_joint_states()  # Returns a list of dicts
-
+        
         for topic, joint_names in self.topic_to_joint_names.items():
-            # Determine which dict to use based on topic
-            if "arm_left" in topic:
-                arm_joint_states = next((d for d in joint_states_list if any(k.startswith("arm_left") for k in d)), {})
-            elif "arm_right" in topic:
-                arm_joint_states = next((d for d in joint_states_list if any(k.startswith("arm_right") for k in d)), {})
-            else:
-                arm_joint_states = {}
-
+            # Find the dict with the most matching joint names
+            best_dict = {}
+            max_found = 0
+            for d in joint_states_list:
+                found = sum(1 for joint in joint_names if joint in d)
+                if found > max_found:
+                    max_found = found
+                    best_dict = d
+            # Use best_dict for this topic
             self.topic_to_commanded_positions[topic] = [
-                arm_joint_states.get(joint, 0.0) for joint in joint_names
-            ]                       
+                best_dict.get(joint, 0.0) for joint in joint_names
+            ]        
 
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
