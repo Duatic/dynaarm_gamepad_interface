@@ -49,12 +49,20 @@ class GamepadInterface(Node):
             ListControllers, "/controller_manager/list_controllers"
         )
 
+        self.is_simulation = self._check_simulation_mode()
         self.joint_states = {}
         self.initial_positions_set = False
         self.commanded_positions = []
         self.is_joystick_idle = True
         self.joint_pos_offset_tolerance = 0.1
-        self.dt = 0.0005
+        
+        if self.is_simulation:
+            self.dt = 0.05  # 50ms for simulation (20Hz)
+            self.get_logger().info("Using simulation timing: dt=0.05s (20Hz)")
+        else:
+            self.dt = 0.001  # 0.5ms for real hardware (2000Hz)
+            self.get_logger().info("Using real hardware timing: dt=0.0005s (2000Hz)")
+
         self.latest_joy_msg = None
         self.joy_lock = threading.Lock()
         self.last_menu_button_state = 0
@@ -94,6 +102,62 @@ class GamepadInterface(Node):
             self.commanded_positions = list(self.joint_states.values())
             self.initial_positions_set = True
 
+    def _check_robot_amount(self):
+        """
+        Robustly detect the number of robots by analyzing joint name prefixes from /joint_states.
+        """
+        self.get_logger().info("Waiting for /joint_states to detect robots...")
+        import time
+
+        # Wait for joint_states to be populated
+        timeout = 10.0
+        start = time.time()
+        while not self.joint_states and (time.time() - start) < timeout:
+            rclpy.spin_once(self, timeout_sec=0.1)
+
+        if not self.joint_states:
+            self.get_logger().error("No joint states received. Cannot detect robots.")
+            rclpy.shutdown()
+            sys.exit(1)
+
+        # Extract unique robot prefixes based on joint naming patterns
+        prefixes = set()
+        for joint_name in self.joint_states.keys():
+            if "/" in joint_name:
+                # Multi-arm case: 'arm_right/shoulder_rotation' -> 'arm_right'
+                prefix = joint_name.split("/")[0]
+                prefixes.add(prefix)
+            else:
+                # Single arm case: 'shoulder_rotation' -> no prefix (None)
+                prefixes.add("None")
+
+        count = len(prefixes)
+        
+        # Log detected prefixes for debugging
+        prefix_list = list(prefixes)
+        self.get_logger().info(f"Detected {count} robot(s) with prefixes: {prefix_list}")
+        
+        if count > 2:
+            self.get_logger().error(
+                "More than 2 robots detected by joint name prefix. Only up to two are supported."
+            )
+            rclpy.shutdown()
+            sys.exit(1)
+        
+        return count
+
+    def _check_simulation_mode(self):
+        """Detect if we're running in simulation or real hardware mode."""
+
+        try:
+            node_names = self.get_node_names()
+            if 'gz_ros_control' in node_names:                
+                return True
+        except Exception as e:
+            self.get_logger().debug(f"Could not check for gz_ros_control: {e}")
+        
+        return False
+
     def joy_callback(self, msg: Joy):
         """Store latest joystick message."""
         with self.joy_lock:
@@ -129,7 +193,7 @@ class GamepadInterface(Node):
             else:
                 current_controller.process_input(msg)
 
-    def wait_for_controller_manager(self):
+    def _wait_for_controller_manager(self):
         self.get_logger().info("Waiting for controller_manager to be online...")
         if not self.controller_client.wait_for_service(timeout_sec=10.0):
             self.get_logger().error("controller_manager service not available. Exiting.")
@@ -137,30 +201,29 @@ class GamepadInterface(Node):
             sys.exit(1)
         self.get_logger().info("controller_manager is online.")
 
-    def check_joint_trajectory_controllers(self):
-        req = ListControllers.Request()
-        future = self.controller_client.call_async(req)
-        rclpy.spin_until_future_complete(self, future)
-        if future.result() is not None:
-            controllers = future.result().controller
-            jtcs = [c for c in controllers if c.name.startswith("freeze_controller")]
-            count = len(jtcs)
-            self.get_logger().info(f"Found {count} robots(s).")
-            if count > 2:
-                self.get_logger().error(
-                    "More than 2 freeze_controllers found. Only up to two are supported."
-                )
-                rclpy.shutdown()
-                sys.exit(1)
-        else:
-            self.get_logger().error("Failed to get controllers from controller_manager.")
-            rclpy.shutdown()
-            sys.exit(1)
+    # def check_joint_trajectory_controllers(self):
+    #     req = ListControllers.Request()
+    #     future = self.controller_client.call_async(req)
+    #     rclpy.spin_until_future_complete(self, future)
+    #     if future.result() is not None:
+    #         controllers = future.result().controller
+    #         jtcs = [c for c in controllers if c.name.startswith("freeze_controller")]
+    #         count = len(jtcs)
+    #         self.get_logger().info(f"Found {count} robots(s).")
+    #         if count > 2:
+    #             self.get_logger().error(
+    #                 "More than 2 freeze_controllers found. Only up to two are supported."
+    #             )
+    #             rclpy.shutdown()
+    #             sys.exit(1)
+    #     else:
+    #         self.get_logger().error("Failed to get controllers from controller_manager.")
+    #         rclpy.shutdown()
+    #         sys.exit(1)
 
     def run(self):
-        self.wait_for_controller_manager()
-        self.check_joint_trajectory_controllers()
-
+        self._wait_for_controller_manager()
+        self._check_robot_amount()   
 
 def main(args=None):
 
