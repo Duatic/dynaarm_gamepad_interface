@@ -28,90 +28,165 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 class JointTrajectoryController(BaseController):
     """Handles joint trajectory control using the gamepad"""
 
+    MIRRORED_BASES = {"shoulder_rotation", "forearm_rotation", "wrist_rotation"}
+
     def __init__(self, node):
         super().__init__(node)
+        topic_prefix = "/joint_trajectory_controller"
+        found_topics = self.get_topic_names_and_types(f"{topic_prefix}*/joint_trajectory")
 
-        # Publisher for sending joint trajectory commands
-        self.joint_trajectory_publisher = self.node.create_publisher(
-            JointTrajectory, "/joint_trajectory_controller/joint_trajectory", 10
-        )
+        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
+        self.joint_trajectory_publishers = {}
+        self.topic_to_joint_names = {}
+        self.topic_to_commanded_positions = {}
+        self.prefix_to_joints = {}
+        self.is_joystick_idle = True
 
-        self.is_joystick_idle = True  # Track joystick idle state
-        self.commanded_positions = []  # Stores the current commanded positions
+        # Discover all topics and joint names, extract prefix
+        for topic, types in found_topics:
+            self.joint_trajectory_publishers[topic] = self.node.create_publisher(
+                JointTrajectory, topic, 10
+            )
+            # Extract prefix from topic name
+            # e.g. /joint_trajectory_controller_arm_1/joint_trajectory -> arm_1
+            topic_parts = topic[len(topic_prefix) :].split("/")
+            prefix = (
+                topic_parts[0][1:]
+                if topic_parts[0].startswith("_")
+                else topic_parts[0] if topic_parts[0] else ""
+            )
+            joint_names = self.get_param_values(topic.split("/")[1], "joints")
+            if joint_names:
+                self.topic_to_joint_names[topic] = joint_names
+                self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)
+                self.prefix_to_joints[prefix] = joint_names
+            else:
+                print("Parameter not found or empty for topic", topic)
+
+        # Build mirrored joints: for each base, find all prefixes that have that joint
+        self.mirrored_joints = []
+        for base in self.MIRRORED_BASES:
+            # Find all joints with this base, grouped by prefix
+            found = []
+            for prefix, joints in self.prefix_to_joints.items():
+                for joint in joints:
+                    # Accept both arm_1/shoulder_rotation and arm_1_shoulder_rotation
+                    if joint.endswith("/" + base) or joint.endswith("_" + base) or joint == base:
+                        found.append(joint)
+            if len(found) == 2:
+                # Pick one to mirror (e.g. the one with the "higher" prefix)
+                found_sorted = sorted(found)
+                self.mirrored_joints.append(found_sorted[1])
+        if self.mirrored_joints:
+            self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")
 
     def reset(self):
-        """Reset commanded positions to current joint states on activation."""
-        joint_states = self.get_joint_states()
-        if joint_states:
-            self.commanded_positions = list(joint_states.values())
+        """Reset commanded positions to current joint states for all topics."""
+        joint_states_list = self.get_joint_states()  # Returns a list of dicts
+
+        for topic, joint_names in self.topic_to_joint_names.items():
+            # Find the dict with the most matching joint names
+            best_dict = {}
+            max_found = 0
+            for d in joint_states_list:
+                found = sum(1 for joint in joint_names if joint in d)
+                if found > max_found:
+                    max_found = found
+                    best_dict = d
+            # Use best_dict for this topic
+            self.topic_to_commanded_positions[topic] = [
+                best_dict.get(joint, 0.0) for joint in joint_names
+            ]
 
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
         super().process_input(msg)  # For any base logging logic
 
-        joint_names = list(self.node.joint_states.keys())
-
         any_axis_active = False
         deadzone = 0.1
 
-        for i, joint_name in enumerate(joint_names):
-            axis_val = 0.0
+        # Process each topic (arm/controller) independently
+        for topic, joint_names in self.topic_to_joint_names.items():
+            commanded_positions = self.topic_to_commanded_positions[topic]
+            for i, joint_name in enumerate(joint_names):
+                axis_val = 0.0
 
-            if i == 0 and len(msg.axes) > self.node.axis_mapping["left_joystick"]["x"]:
-                axis_val = msg.axes[self.node.axis_mapping["left_joystick"]["x"]]
-            elif i == 1 and len(msg.axes) > self.node.axis_mapping["left_joystick"]["y"]:
-                axis_val = msg.axes[self.node.axis_mapping["left_joystick"]["y"]]
-            elif i == 2 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["y"]:
-                axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["y"]]
-            elif i == 3 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["x"]:
-                axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["x"]]
-            elif i == 4:
-                left_trigger = msg.axes[self.node.axis_mapping["triggers"]["left"]]
-                right_trigger = msg.axes[self.node.axis_mapping["triggers"]["right"]]
-                axis_val = right_trigger - left_trigger
-            elif i == 5:
-                move_left = msg.buttons[self.node.button_mapping["wrist_rotation_left"]] == 1
-                move_right = msg.buttons[self.node.button_mapping["wrist_rotation_right"]] == 1
+                # Map axes/buttons as needed for each joint index
+                if i == 0 and len(msg.axes) > self.node.axis_mapping["left_joystick"]["x"]:
+                    axis_val = msg.axes[self.node.axis_mapping["left_joystick"]["x"]]
+                elif i == 1 and len(msg.axes) > self.node.axis_mapping["left_joystick"]["y"]:
+                    axis_val = msg.axes[self.node.axis_mapping["left_joystick"]["y"]]
+                elif i == 2 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["y"]:
+                    axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["y"]]
+                elif i == 3 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["x"]:
+                    axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["x"]]
+                elif i == 4:
+                    left_trigger = msg.axes[self.node.axis_mapping["triggers"]["left"]]
+                    right_trigger = msg.axes[self.node.axis_mapping["triggers"]["right"]]
+                    axis_val = right_trigger - left_trigger
+                elif i == 5:
+                    move_left = msg.buttons[self.node.button_mapping["wrist_rotation_left"]] == 1
+                    move_right = msg.buttons[self.node.button_mapping["wrist_rotation_right"]] == 1
+                    if move_left and not move_right:
+                        axis_val = -1.0
+                    elif move_right and not move_left:
+                        axis_val = 1.0
 
-                if move_left and not move_right:
-                    axis_val = -1.0
-                elif move_right and not move_left:
-                    axis_val = 1.0
+                if self.mirror and joint_name in self.mirrored_joints:
+                    axis_val = -axis_val
 
-            # Only process if axis input is beyond deadzone
-            if abs(axis_val) > deadzone:
-                current_position = self.node.joint_states[joint_name]
+                if abs(axis_val) > deadzone:
+                    current_position = self.node.joint_states.get(joint_name, 0.0)
+                    commanded_positions[i] += axis_val * self.node.dt
+                    offset = commanded_positions[i] - current_position
+                    if offset > self.node.joint_pos_offset_tolerance:
+                        commanded_positions[i] = (
+                            current_position + self.node.joint_pos_offset_tolerance
+                        )
+                        self.node.gamepad_feedback.send_feedback(intensity=1.0)
+                    elif offset < -self.node.joint_pos_offset_tolerance:
+                        commanded_positions[i] = (
+                            current_position - self.node.joint_pos_offset_tolerance
+                        )
+                        self.node.gamepad_feedback.send_feedback(intensity=1.0)
+                    any_axis_active = True
 
-                self.commanded_positions[i] += axis_val * self.node.dt
+            # Update the commanded positions for this topic
+            self.topic_to_commanded_positions[topic] = commanded_positions
 
-                # Clamp the offset between the commanded and current positions:
-                offset = self.commanded_positions[i] - current_position
-                if offset > self.node.joint_pos_offset_tolerance:
-                    self.commanded_positions[i] = (
-                        current_position + self.node.joint_pos_offset_tolerance
-                    )
-                    self.node.gamepad_feedback.send_feedback(intensity=1.0)
-                elif offset < -self.node.joint_pos_offset_tolerance:
-                    self.commanded_positions[i] = (
-                        current_position - self.node.joint_pos_offset_tolerance
-                    )
-                    self.node.gamepad_feedback.send_feedback(intensity=1.0)
-
-                any_axis_active = True
-
-        # Publish position command if movement detected
+        # Publish for all topics that have movement
         if any_axis_active:
             self.is_joystick_idle = False
-            self.publish_joint_trajectory(self.commanded_positions)
-
-        # If joystick was just released, hold position
+            for topic, publisher in self.joint_trajectory_publishers.items():
+                self.publish_joint_trajectory(
+                    self.topic_to_commanded_positions[topic],
+                    publisher=publisher,
+                    joint_names=self.topic_to_joint_names[topic],
+                )
         elif not any_axis_active and not self.is_joystick_idle:
-            self.publish_joint_trajectory(self.commanded_positions)
-            self.is_joystick_idle = True  # Mark as idle
+            # Hold position for all topics
+            for topic, publisher in self.joint_trajectory_publishers.items():
+                self.publish_joint_trajectory(
+                    self.topic_to_commanded_positions[topic],
+                    publisher=publisher,
+                    joint_names=self.topic_to_joint_names[topic],
+                )
+            self.is_joystick_idle = True
 
-    def publish_joint_trajectory(self, target_positions, speed_percentage=1.0):
-        """Publishes a joint trajectory message with multiple points for smoother movement."""
-        joint_names = list(self.get_joint_states().keys())
+    def get_joint_base_name(self, joint_name):
+        # Assumes joint names are like 'shoulder_rotation_arm_left'
+        return (
+            "_".join(joint_name.split("_")[:-2])
+            if joint_name.endswith(("_arm_left", "_arm_right"))
+            else joint_name.rsplit("_", 1)[0]
+        )
+
+    def publish_joint_trajectory(
+        self, target_positions, publisher, joint_names=None, speed_percentage=1.0
+    ):
+        """Publishes a joint trajectory message for the given positions using the provided publisher."""
+        if joint_names is None:
+            joint_names = list(self.node.joint_states.keys())
 
         if not joint_names:
             self.node.get_logger().error("No joint names available. Cannot publish trajectory.")
@@ -128,12 +203,12 @@ class JointTrajectoryController(BaseController):
         trajectory_msg.joint_names = joint_names
         point = JointTrajectoryPoint()
         point.positions = target_positions
-        point.velocities = [0.0] * len(joint_names)  # Set velocity to zero
-        point.accelerations = [0.0] * len(joint_names)  # Set acceleration to zero
+        point.velocities = [0.0] * len(joint_names)
+        point.accelerations = [0.0] * len(joint_names)
         time_in_sec = self.node.dt
         sec = int(time_in_sec)
         nanosec = int((time_in_sec - sec) * 1e9)
         point.time_from_start.sec = sec
         point.time_from_start.nanosec = nanosec
         trajectory_msg.points.append(point)
-        self.joint_trajectory_publisher.publish(trajectory_msg)
+        publisher.publish(trajectory_msg)

@@ -133,6 +133,10 @@ class CartesianController(BaseController):
         )
         new_q = quaternion_from_euler(*new_euler)
 
+        # Normalize the quaternion to ensure it is valid
+        norm = (new_q[0] ** 2 + new_q[1] ** 2 + new_q[2] ** 2 + new_q[3] ** 2) ** 0.5
+        new_q = [q / norm for q in new_q]
+
         self.current_pose.pose.orientation.x = new_q[0]
         self.current_pose.pose.orientation.y = new_q[1]
         self.current_pose.pose.orientation.z = new_q[2]
