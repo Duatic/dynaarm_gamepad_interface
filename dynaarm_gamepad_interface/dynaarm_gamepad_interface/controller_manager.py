@@ -147,11 +147,13 @@ class ControllerManager:
                         current_active_controller in self.found_controllers_by_base
                         and self.found_controllers_by_base[current_active_controller]
                     ):
-                        active_controller_index = self.controller_whitelist.index(current_active_controller)
-                        
+                        active_controller_index = self.controller_whitelist.index(
+                            current_active_controller
+                        )
+
                         if self.current_controller_index != active_controller_index:
-                    
-                            self.controllers[current_active_controller].reset()                            
+
+                            self.controllers[current_active_controller].reset()
                             self.current_controller_index = active_controller_index
                             self.current_active_controller = current_active_controller
 
@@ -186,17 +188,21 @@ class ControllerManager:
             new_base_index = (self.current_controller_index + i) % num_bases
             new_base = self.controller_whitelist[new_base_index]
             real_controllers = [
-            name for controllers in self.found_controllers_by_base.get(new_base, [])
-            for name, _ in controllers.items()
+                name
+                for controllers in self.found_controllers_by_base.get(new_base, [])
+                for name, _ in controllers.items()
             ]
-            
+
             if real_controllers:
                 break
 
-            self.node.get_logger().debug(f"Real controllers for base '{new_base}': {real_controllers}")
+            self.node.get_logger().debug(
+                f"Real controllers for base '{new_base}': {real_controllers}"
+            )
         else:
             self.node.get_logger().warn(
-            "No real controllers found for any base in the whitelist.", throttle_duration_sec=10.0
+                "No real controllers found for any base in the whitelist.",
+                throttle_duration_sec=10.0,
             )
             return
 
@@ -208,7 +214,8 @@ class ControllerManager:
         if self.current_controller_index >= 0:
             current_base = self.controller_whitelist[self.current_controller_index]
             current_real_controllers = [
-                name for controllers in self.found_controllers_by_base.get(current_base, [])
+                name
+                for controllers in self.found_controllers_by_base.get(current_base, [])
                 for name, _ in controllers.items()
             ]
             req.deactivate_controllers.extend(current_real_controllers)

@@ -25,6 +25,7 @@ import rclpy
 from rclpy.parameter_client import AsyncParameterClient
 import re
 
+
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
 
@@ -32,7 +33,7 @@ class BaseController:
         self.node = node
         self.log_printed = False  # Track whether the log was printed
         self.arms_count = 0  # Count of arms, used for logging
-    
+
     def get_param_values(self, controller_ns, param_name):
         """Retrieve parameter values from the node."""
 
@@ -45,20 +46,16 @@ class BaseController:
             return joint_names
 
     def get_topic_names_and_types(self, by_name):
-        """ This base class retrieves topic names by a given name.
+        """This base class retrieves topic names by a given name.
         Args:
             by_name (str): The name of the topic to retrieve.
         Returns:
             list: A list of topic names and types matching the given name.
         """
-        
+
         pattern = re.compile(by_name.replace("*", ".*"))
         topics_and_types = self.node.get_topic_names_and_types()
-        matches = [
-            (topic, types)
-            for topic, types in topics_and_types
-            if pattern.fullmatch(topic)
-        ]
+        matches = [(topic, types) for topic, types in topics_and_types if pattern.fullmatch(topic)]
         self.arms_count = len(matches)
         return matches
 

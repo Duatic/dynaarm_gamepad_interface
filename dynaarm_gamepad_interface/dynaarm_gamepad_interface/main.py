@@ -33,7 +33,6 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Joy, JointState
-from std_msgs.msg import Float64MultiArray
 from controller_manager_msgs.srv import ListControllers
 
 from dynaarm_gamepad_interface.controller_manager import ControllerManager
@@ -44,9 +43,11 @@ class GamepadInterface(Node):
     """Processes joystick input"""
 
     def __init__(self, mirror=False):
-        super().__init__('gamepad_interface')
-        
-        self.controller_client = self.create_client(ListControllers, '/controller_manager/list_controllers')
+        super().__init__("gamepad_interface")
+
+        self.controller_client = self.create_client(
+            ListControllers, "/controller_manager/list_controllers"
+        )
 
         self.joint_states = {}
         self.initial_positions_set = False
@@ -59,11 +60,6 @@ class GamepadInterface(Node):
         self.last_menu_button_state = 0
 
         self.declare_parameter("mirror", mirror)
-
-        # Publisher for sending position commands
-        self.position_pub = self.create_publisher(
-            Float64MultiArray, "/position_controller/commands", 10
-        )
 
         # Subscribers
         self.create_subscription(Joy, "/joy", self.joy_callback, 10)
@@ -147,11 +143,13 @@ class GamepadInterface(Node):
         rclpy.spin_until_future_complete(self, future)
         if future.result() is not None:
             controllers = future.result().controller
-            jtcs = [c for c in controllers if c.name.startswith('freeze_controller')]
+            jtcs = [c for c in controllers if c.name.startswith("freeze_controller")]
             count = len(jtcs)
             self.get_logger().info(f"Found {count} robots(s).")
             if count > 2:
-                self.get_logger().error("More than 2 freeze_controllers found. Only up to two are supported.")
+                self.get_logger().error(
+                    "More than 2 freeze_controllers found. Only up to two are supported."
+                )
                 rclpy.shutdown()
                 sys.exit(1)
         else:
@@ -163,10 +161,11 @@ class GamepadInterface(Node):
         self.wait_for_controller_manager()
         self.check_joint_trajectory_controllers()
 
+
 def main(args=None):
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--mirror', action='store_true', help='Mirror arm movements')
+    parser.add_argument("--mirror", action="store_true", help="Mirror arm movements")
     parsed_args = parser.parse_args()
 
     rclpy.init(args=args)
