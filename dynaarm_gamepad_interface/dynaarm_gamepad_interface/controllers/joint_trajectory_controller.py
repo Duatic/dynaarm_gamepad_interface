@@ -23,7 +23,6 @@
 
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-import rclpy
 
 
 class JointTrajectoryController(BaseController):
