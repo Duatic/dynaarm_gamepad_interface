@@ -55,7 +55,7 @@ class GamepadInterface(Node):
         self.commanded_positions = []
         self.is_joystick_idle = True
         self.joint_pos_offset_tolerance = 0.1
-        
+
         if self.is_simulation:
             self.dt = 0.05  # 50ms for simulation (20Hz)
             self.get_logger().info("Using simulation timing: dt=0.05s (20Hz)")
@@ -132,18 +132,18 @@ class GamepadInterface(Node):
                 prefixes.add("None")
 
         count = len(prefixes)
-        
+
         # Log detected prefixes for debugging
         prefix_list = list(prefixes)
         self.get_logger().info(f"Detected {count} robot(s) with prefixes: {prefix_list}")
-        
+
         if count > 2:
             self.get_logger().error(
                 "More than 2 robots detected by joint name prefix. Only up to two are supported."
             )
             rclpy.shutdown()
             sys.exit(1)
-        
+
         return count
 
     def _check_simulation_mode(self):
@@ -151,11 +151,11 @@ class GamepadInterface(Node):
 
         try:
             node_names = self.get_node_names()
-            if 'gz_ros_control' in node_names:                
+            if "gz_ros_control" in node_names:
                 return True
         except Exception as e:
             self.get_logger().debug(f"Could not check for gz_ros_control: {e}")
-        
+
         return False
 
     def joy_callback(self, msg: Joy):
@@ -223,7 +223,8 @@ class GamepadInterface(Node):
 
     def run(self):
         self._wait_for_controller_manager()
-        self._check_robot_amount()   
+        self._check_robot_amount()
+
 
 def main(args=None):
 

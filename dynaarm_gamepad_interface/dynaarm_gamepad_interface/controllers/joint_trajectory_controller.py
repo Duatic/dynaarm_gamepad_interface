@@ -135,10 +135,10 @@ class JointTrajectoryController(BaseController):
                 if self.mirror and joint_name in self.mirrored_joints:
                     axis_val = -axis_val
 
-                if abs(axis_val) > deadzone:                    
+                if abs(axis_val) > deadzone:
                     current_position = self.node.joint_states.get(joint_name, 0.0)
                     commanded_positions[i] += axis_val * self.node.dt
-                    offset = commanded_positions[i] - current_position                    
+                    offset = commanded_positions[i] - current_position
                     if offset > self.node.joint_pos_offset_tolerance:
                         commanded_positions[i] = (
                             current_position + self.node.joint_pos_offset_tolerance
@@ -157,7 +157,7 @@ class JointTrajectoryController(BaseController):
         # Publish for all topics that have movement
         if any_axis_active:
             self.is_joystick_idle = False
-            for topic, publisher in self.joint_trajectory_publishers.items():                
+            for topic, publisher in self.joint_trajectory_publishers.items():
                 self.publish_joint_trajectory(
                     self.topic_to_commanded_positions[topic],
                     publisher=publisher,
@@ -170,7 +170,7 @@ class JointTrajectoryController(BaseController):
                     self.topic_to_commanded_positions[topic],
                     publisher=publisher,
                     joint_names=self.topic_to_joint_names[topic],
-                )                
+                )
             self.is_joystick_idle = True
 
     def get_joint_base_name(self, joint_name):
@@ -212,4 +212,3 @@ class JointTrajectoryController(BaseController):
         point.time_from_start.nanosec = nanosec
         trajectory_msg.points.append(point)
         publisher.publish(trajectory_msg)
-
