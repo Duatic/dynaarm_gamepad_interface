@@ -43,8 +43,6 @@ gamepad_node:
 
     controllers:
       joint_trajectory_controller:
-        whitelisted: true
-      position_controller:
-        whitelisted: true
+        whitelisted: true      
       freedrive_controller:
         whitelisted: true
