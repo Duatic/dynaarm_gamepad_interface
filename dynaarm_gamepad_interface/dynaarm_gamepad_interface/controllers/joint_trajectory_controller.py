@@ -38,11 +38,13 @@ class JointTrajectoryController(BaseController):
         topic_prefix = "/joint_trajectory_controller"
         found_topics = self.get_topic_names_and_types(f"{topic_prefix}*/joint_trajectory")
 
-        self.home_position = [0.0] * 6
-        self.step_size_flexion_joints = 0.002  # joints 2,3,5
+        self.sleep_position = [-1.5708, -0.6108, 0.0, 0.0, 0.0, 0.0]  # Default sleep position for all joints
+        self.home_position = [-1.5708, 0.0, 0.0, 0.0, 0.0, 0.0]  # Default home position for all joints
+        self.step_size_flexion_joints = 0.005  # joints 2,3,5
         self.step_size_rotation_joints= 0.005  # other joints
         self.flexion_joints_indicies = [1, 2, 4]  # Joints 2, 3, 5
         self.rotation_joints_indicies = [i for i in range(6) if i not in self.flexion_joints_indicies]
+        self.mirror_arm = False  # Flag to toggle mirroring of the arm
 
         self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
         self.joint_trajectory_publishers = {}
@@ -50,9 +52,11 @@ class JointTrajectoryController(BaseController):
         self.topic_to_commanded_positions = {}
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
+        self.num_arms = 0
 
         # Discover all topics and joint names, extract prefix
-        for topic, types in found_topics:
+        for topic, types in found_topics:#
+            self.num_arms += 1
             self.joint_trajectory_publishers[topic] = self.node.create_publisher(
                 JointTrajectory, topic, 10
             )
@@ -71,7 +75,6 @@ class JointTrajectoryController(BaseController):
                 self.prefix_to_joints[prefix] = joint_names
             else:
                 print("Parameter not found or empty for topic", topic)
-
         # Build mirrored joints: for each base, find all prefixes that have that joint
         self.mirrored_joints = []
         for base in self.MIRRORED_BASES:
@@ -118,8 +121,15 @@ class JointTrajectoryController(BaseController):
         for topic, joint_names in self.topic_to_joint_names.items():
             commanded_positions = self.topic_to_commanded_positions[topic]
             if msg.buttons[3]:
-                commanded_positions = self.move_to_home(joint_names)
+                commanded_positions = self.move_to_position(joint_names, self.home_position.copy(), self.mirror_arm)
                 any_axis_active = True
+                if self.num_arms==2:
+                    self.mirror_arm = not self.mirror_arm
+            elif msg.buttons[1]:
+                commanded_positions = self.move_to_position(joint_names, self.sleep_position.copy(), self.mirror_arm)
+                any_axis_active = True
+                if self.num_arms==2:
+                    self.mirror_arm = not self.mirror_arm
             else:
                 for i, joint_name in enumerate(joint_names):
                     axis_val = 0.0
@@ -186,15 +196,15 @@ class JointTrajectoryController(BaseController):
                 )
             self.is_joystick_idle = True
 
-    def joints_at_home(self, current, indices, tolerance=0.05):
-        return all(abs(current[i] - self.home_position[i]) < tolerance for i in indices)
+    def joints_at_home(self, current, indices, target_position, tolerance=0.05):
+        return all(abs(current[i] - target_position[i]) < tolerance for i in indices)
     
     # Returns the movement phase based on current joint positions
     # 0 = all joints at home, 1 = flexion joints needs moving, 2 = rotation joints needs moving
-    def get_movement_phase(self, current_joints):
+    def get_movement_phase(self, current_joints, target_position):
 
-        flexion_done = self.joints_at_home(current_joints, self.flexion_joints_indicies)
-        rotation_done = self.joints_at_home(current_joints, self.rotation_joints_indicies)
+        flexion_done = self.joints_at_home(current_joints, self.flexion_joints_indicies, target_position)
+        rotation_done = self.joints_at_home(current_joints, self.rotation_joints_indicies, target_position)
 
         if flexion_done:
             if rotation_done:
@@ -210,19 +220,23 @@ class JointTrajectoryController(BaseController):
                 return [joint_dict[name] for name in joint_names]
         return []  # Not found
 
-    def move_to_home(self, joint_names):
+    def move_to_position(self, joint_names, target_position, mirror_arm=False):
+        if mirror_arm:
+            mirrored_indices = [i for i, name in enumerate(joint_names) if any(base in name for base in self.MIRRORED_BASES)]
+            for i in mirrored_indices:
+                target_position[i] = -target_position[i]
         current_joint_values = self.extract_joint_values(self.get_joint_states(), joint_names)
-        self.movement_phase = self.get_movement_phase(current_joint_values) # Describes which joints need moving, flexion, rotation or all at home
+        self.movement_phase = self.get_movement_phase(current_joint_values, target_position) # Describes which joints need moving, flexion, rotation or all at home
 
         try:
             if self.movement_phase == 1:
                 next_step = self.interpolate_partial(
-                    current_joint_values, self.home_position, self.flexion_joints_indicies, self.step_size_flexion_joints)
+                    current_joint_values, target_position, self.flexion_joints_indicies, self.step_size_flexion_joints, joint_names)
                 return next_step
 
             elif self.movement_phase == 2:
                 next_step = self.interpolate_partial(
-                    current_joint_values, self.home_position, self.rotation_joints_indicies, self.step_size_rotation_joints)
+                    current_joint_values, target_position, self.rotation_joints_indicies, self.step_size_rotation_joints, joint_names)
                 return next_step
 
             elif self.movement_phase == 0:
@@ -232,7 +246,7 @@ class JointTrajectoryController(BaseController):
         except KeyboardInterrupt:
             print("Keyboard interrupt received, stopping home movement.")
 
-    def interpolate_partial(self, current, target, indices, step_size):
+    def interpolate_partial(self, current, target, indices, step_size, joint_names):
         next_step = current[:]
         for i in indices:
             delta = target[i] - current[i]
