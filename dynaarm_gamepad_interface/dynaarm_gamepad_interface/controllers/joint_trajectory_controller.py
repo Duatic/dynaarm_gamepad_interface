@@ -117,7 +117,7 @@ class JointTrajectoryController(BaseController):
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
             commanded_positions = self.topic_to_commanded_positions[topic]
-            if msg.buttons[1]:
+            if msg.buttons[3]:
                 commanded_positions = self.move_to_home(joint_names)
                 any_axis_active = True
             else:
@@ -186,7 +186,7 @@ class JointTrajectoryController(BaseController):
                 )
             self.is_joystick_idle = True
 
-    def joints_at_home(self, current, indices, tolerance=0.01):
+    def joints_at_home(self, current, indices, tolerance=0.05):
         return all(abs(current[i] - self.home_position[i]) < tolerance for i in indices)
     
     # Returns the movement phase based on current joint positions
@@ -226,7 +226,7 @@ class JointTrajectoryController(BaseController):
                 return next_step
 
             elif self.movement_phase == 0:
-                self.node.get_logger().info("All joints already at home position.")
+                self.node.get_logger().info("All joints already at home position.", throttle_duration_sec = 10.0)
                 return current_joint_values
 
         except KeyboardInterrupt:
