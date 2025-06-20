@@ -40,8 +40,8 @@ class JointTrajectoryController(BaseController):
 
         self.sleep_position = [-1.5708, -0.6108, 0.0, 0.0, 0.0, 0.0]  # Default sleep position for all joints
         self.home_position = [-1.5708, 0.0, 0.0, 0.0, 0.0, 0.0]  # Default home position for all joints
-        self.step_size_flexion_joints = 0.005  # joints 2,3,5
-        self.step_size_rotation_joints= 0.005  # other joints
+        self.step_size_flexion_joints = 0.001  # joints 2,3,5
+        self.step_size_rotation_joints= 0.002  # other joints
         self.flexion_joints_indicies = [1, 2, 4]  # Joints 2, 3, 5
         self.rotation_joints_indicies = [i for i in range(6) if i not in self.flexion_joints_indicies]
         self.mirror_arm = False  # Flag to toggle mirroring of the arm
