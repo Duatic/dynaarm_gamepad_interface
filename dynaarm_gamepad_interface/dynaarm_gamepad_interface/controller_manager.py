@@ -139,7 +139,7 @@ class ControllerManager:
                     self.emergency_button_was_pressed = True
                 elif not self.is_freeze_active and self.emergency_button_was_pressed:
                     self.node.get_logger().warn(
-                        "    ✅   Emergency stop is DEACTIVATED!   ✅           \n"
+                        "    ✅   Emergency stop is DEACTIVATED!   ✅           "
                     )
                     self.emergency_button_was_pressed = False
 
