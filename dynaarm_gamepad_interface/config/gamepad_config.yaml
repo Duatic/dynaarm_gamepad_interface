@@ -26,7 +26,9 @@
 gamepad_node:
   ros__parameters:
     button_mapping:
-      move_home: 2
+      move_home: 3
+      move_sleep: 1
+      dead_man_switch: 10
       wrist_rotation_left: 7
       wrist_rotation_right: 8
       switch_controller: 6  # Menu button for switching controllers
