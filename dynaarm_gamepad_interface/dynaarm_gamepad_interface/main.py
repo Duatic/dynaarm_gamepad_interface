@@ -199,7 +199,10 @@ class GamepadInterface(Node):
     def _wait_for_controller_manager(self):
         self.get_logger().info("Waiting for controller_manager to be online...")
         while not self.controller_client.wait_for_service(timeout_sec=5.0):
-            self.get_logger().warn("controller_manager service not available yet. Waiting...", throttle_duration_sec=10.0)
+            self.get_logger().warn(
+                "controller_manager service not available yet. Waiting...",
+                throttle_duration_sec=10.0,
+            )
         self.get_logger().info("controller_manager is online.")
 
     # def check_joint_trajectory_controllers(self):
