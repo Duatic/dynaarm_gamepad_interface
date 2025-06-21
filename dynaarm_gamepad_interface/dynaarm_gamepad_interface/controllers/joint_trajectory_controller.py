@@ -36,15 +36,15 @@ class JointTrajectoryController(BaseController):
         found_topics = self.get_topic_names_and_types(f"{topic_prefix}*/joint_trajectory")
 
         self.sleep_position = [
-            -1.5708,
-            -0.541052,
+            1.5708,
+            0.733038,
             0.0,
             0.0,
             0.0,
             0.0,
         ]  # Default sleep position for all joints
         self.home_position = [
-            -1.5708,
+            1.5708,
             0.0,
             0.0,
             0.0,
@@ -66,6 +66,7 @@ class JointTrajectoryController(BaseController):
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
         self.num_arms = 0
+        self.tolerance = 0.02
 
         # Discover all topics and joint names, extract prefix
         for topic, types in found_topics:  #
@@ -123,6 +124,26 @@ class JointTrajectoryController(BaseController):
                 best_dict.get(joint, 0.0) for joint in joint_names
             ]
 
+    def joint_angles_equal(self, list1, list2):
+        if len(list1) != len(list2):
+            return False
+        for i, (a, b) in enumerate(zip(list1, list2)):
+            if i == 1:
+                continue  # Skip index 1
+            if abs(a - b) > self.tolerance:
+                return False
+        return True
+    
+    def mirror_position(self, joint_names, target_position):
+        mirrored_indices = [
+            i
+            for i, name in enumerate(joint_names)
+            if any(base in name for base in self.MIRRORED_BASES)
+        ]
+        for i in mirrored_indices:
+            target_position[i] = -target_position[i]
+        return target_position
+
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
         super().process_input(msg)  # For any base logging logic
@@ -132,18 +153,27 @@ class JointTrajectoryController(BaseController):
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
             commanded_positions = self.topic_to_commanded_positions[topic]
-            if msg.buttons[self.node.button_mapping["move_home"]]:
-                commanded_positions = self.move_to_position(
-                    joint_names, self.home_position.copy(), self.mirror_arm
-                )
+            if msg.buttons[self.node.button_mapping["move_home"]]: # If the "move_home" button is pressed
+                if self.mirror_arm: # Mirror the goal positions
+                        target_home_position = self.mirror_position(joint_names, self.home_position.copy())
+                else:
+                        target_home_position = self.home_position.copy()
+                commanded_positions = self.move_to_position(joint_names, target_home_position) # Command the robot arm to move to the home position
                 any_axis_active = True
                 if self.num_arms == 2:
                     self.mirror_arm = not self.mirror_arm
-            elif msg.buttons[self.node.button_mapping["move_sleep"]]:
+            elif msg.buttons[self.node.button_mapping["move_sleep"]]: # If the "move_sleep" button is pressed
                 if self.num_arms == 2:
-                    commanded_positions = self.move_to_position(
-                        joint_names, self.sleep_position.copy(), self.mirror_arm
-                    )
+                    if self.mirror_arm: # Mirror the goal positions
+                        target_home_position = self.mirror_position(joint_names, self.home_position.copy())
+                        target_sleep_position = self.mirror_position(joint_names, self.sleep_position.copy())
+                    else:
+                        target_home_position = self.home_position.copy()
+                        target_sleep_position = self.sleep_position.copy()
+                    if not self.joint_angles_equal(commanded_positions, target_home_position):  # Move to home position first, then to sleep position if already at home
+                        commanded_positions = self.move_to_position(joint_names, target_home_position)
+                    else:
+                        commanded_positions = self.move_to_position(joint_names, target_sleep_position)
                     any_axis_active = True
                     self.mirror_arm = not self.mirror_arm
             else:
@@ -216,8 +246,8 @@ class JointTrajectoryController(BaseController):
                 )
             self.is_joystick_idle = True
 
-    def joints_at_home(self, current, indices, target_position, tolerance=0.02):
-        return all(abs(current[i] - target_position[i]) < tolerance for i in indices)
+    def joints_at_home(self, current, indices, target_position):
+        return all(abs(current[i] - target_position[i]) < self.tolerance for i in indices)
 
     # Returns the movement phase based on current joint positions
     # 0 = all joints at home, 1 = flexion joints needs moving, 2 = rotation joints needs moving
@@ -244,15 +274,7 @@ class JointTrajectoryController(BaseController):
                 return [joint_dict[name] for name in joint_names]
         return []  # Not found
 
-    def move_to_position(self, joint_names, target_position, mirror_arm=False):
-        if mirror_arm:
-            mirrored_indices = [
-                i
-                for i, name in enumerate(joint_names)
-                if any(base in name for base in self.MIRRORED_BASES)
-            ]
-            for i in mirrored_indices:
-                target_position[i] = -target_position[i]
+    def move_to_position(self, joint_names, target_position):
         current_joint_values = self.extract_joint_values(self.get_joint_states(), joint_names)
         self.movement_phase = self.get_movement_phase(
             current_joint_values, target_position
