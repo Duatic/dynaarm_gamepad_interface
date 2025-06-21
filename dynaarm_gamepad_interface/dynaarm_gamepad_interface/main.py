@@ -170,7 +170,7 @@ class GamepadInterface(Node):
 
         if msg is None or not self.joint_states:
             return  # Skip processing if no joystick input or no joint states
-        
+
         if not msg.buttons[self.button_mapping["dead_man_switch"]]:
             return
 

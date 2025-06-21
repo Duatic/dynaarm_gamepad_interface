@@ -144,7 +144,6 @@ class ControllerManager:
                     )
                     self.emergency_button_was_pressed = False
 
-
                 if active_controller:
 
                     # Get first active controller

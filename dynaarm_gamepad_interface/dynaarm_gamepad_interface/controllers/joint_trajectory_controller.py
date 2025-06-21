@@ -23,9 +23,6 @@
 
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
-from sensor_msgs.msg import JointState
-from rclpy.duration import Duration
-import rclpy
 
 
 class JointTrajectoryController(BaseController):
@@ -38,12 +35,28 @@ class JointTrajectoryController(BaseController):
         topic_prefix = "/joint_trajectory_controller"
         found_topics = self.get_topic_names_and_types(f"{topic_prefix}*/joint_trajectory")
 
-        self.sleep_position = [-1.5708, -0.541052, 0.0, 0.0, 0.0, 0.0]  # Default sleep position for all joints
-        self.home_position = [-1.5708, 0.0, 0.0, 0.0, 0.0, 0.0]  # Default home position for all joints
+        self.sleep_position = [
+            -1.5708,
+            -0.541052,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]  # Default sleep position for all joints
+        self.home_position = [
+            -1.5708,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]  # Default home position for all joints
         self.step_size_flexion_joints = 0.001  # joints 2,3,5
-        self.step_size_rotation_joints= 0.002  # other joints
+        self.step_size_rotation_joints = 0.002  # other joints
         self.flexion_joints_indicies = [1, 2, 4]  # Joints 2, 3, 5
-        self.rotation_joints_indicies = [i for i in range(6) if i not in self.flexion_joints_indicies]
+        self.rotation_joints_indicies = [
+            i for i in range(6) if i not in self.flexion_joints_indicies
+        ]
         self.mirror_arm = False  # Flag to toggle mirroring of the arm
 
         self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
@@ -55,7 +68,7 @@ class JointTrajectoryController(BaseController):
         self.num_arms = 0
 
         # Discover all topics and joint names, extract prefix
-        for topic, types in found_topics:#
+        for topic, types in found_topics:  #
             self.num_arms += 1
             self.joint_trajectory_publishers[topic] = self.node.create_publisher(
                 JointTrajectory, topic, 10
@@ -92,7 +105,6 @@ class JointTrajectoryController(BaseController):
         if self.mirrored_joints:
             self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")
 
-
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""
         joint_states_list = self.get_joint_states()  # Returns a list of dicts
@@ -121,13 +133,17 @@ class JointTrajectoryController(BaseController):
         for topic, joint_names in self.topic_to_joint_names.items():
             commanded_positions = self.topic_to_commanded_positions[topic]
             if msg.buttons[self.node.button_mapping["move_home"]]:
-                commanded_positions = self.move_to_position(joint_names, self.home_position.copy(), self.mirror_arm)
+                commanded_positions = self.move_to_position(
+                    joint_names, self.home_position.copy(), self.mirror_arm
+                )
                 any_axis_active = True
-                if self.num_arms==2:
+                if self.num_arms == 2:
                     self.mirror_arm = not self.mirror_arm
             elif msg.buttons[self.node.button_mapping["move_sleep"]]:
-                if self.num_arms==2:
-                    commanded_positions = self.move_to_position(joint_names, self.sleep_position.copy(), self.mirror_arm)
+                if self.num_arms == 2:
+                    commanded_positions = self.move_to_position(
+                        joint_names, self.sleep_position.copy(), self.mirror_arm
+                    )
                     any_axis_active = True
                     self.mirror_arm = not self.mirror_arm
             else:
@@ -148,8 +164,12 @@ class JointTrajectoryController(BaseController):
                         right_trigger = msg.axes[self.node.axis_mapping["triggers"]["right"]]
                         axis_val = right_trigger - left_trigger
                     elif i == 5:
-                        move_left = msg.buttons[self.node.button_mapping["wrist_rotation_left"]] == 1
-                        move_right = msg.buttons[self.node.button_mapping["wrist_rotation_right"]] == 1
+                        move_left = (
+                            msg.buttons[self.node.button_mapping["wrist_rotation_left"]] == 1
+                        )
+                        move_right = (
+                            msg.buttons[self.node.button_mapping["wrist_rotation_right"]] == 1
+                        )
                         if move_left and not move_right:
                             axis_val = -1.0
                         elif move_right and not move_left:
@@ -198,13 +218,17 @@ class JointTrajectoryController(BaseController):
 
     def joints_at_home(self, current, indices, target_position, tolerance=0.02):
         return all(abs(current[i] - target_position[i]) < tolerance for i in indices)
-    
+
     # Returns the movement phase based on current joint positions
     # 0 = all joints at home, 1 = flexion joints needs moving, 2 = rotation joints needs moving
     def get_movement_phase(self, current_joints, target_position):
 
-        flexion_done = self.joints_at_home(current_joints, self.flexion_joints_indicies, target_position)
-        rotation_done = self.joints_at_home(current_joints, self.rotation_joints_indicies, target_position)
+        flexion_done = self.joints_at_home(
+            current_joints, self.flexion_joints_indicies, target_position
+        )
+        rotation_done = self.joints_at_home(
+            current_joints, self.rotation_joints_indicies, target_position
+        )
 
         if flexion_done:
             if rotation_done:
@@ -213,7 +237,7 @@ class JointTrajectoryController(BaseController):
                 return 2  # Only rotation joints needs moving
         else:
             return 1  # flexion joints needs moving
-        
+
     def extract_joint_values(self, all_joint_states, joint_names):
         for joint_dict in all_joint_states:
             if all(name in joint_dict for name in joint_names):
@@ -222,25 +246,41 @@ class JointTrajectoryController(BaseController):
 
     def move_to_position(self, joint_names, target_position, mirror_arm=False):
         if mirror_arm:
-            mirrored_indices = [i for i, name in enumerate(joint_names) if any(base in name for base in self.MIRRORED_BASES)]
+            mirrored_indices = [
+                i
+                for i, name in enumerate(joint_names)
+                if any(base in name for base in self.MIRRORED_BASES)
+            ]
             for i in mirrored_indices:
                 target_position[i] = -target_position[i]
         current_joint_values = self.extract_joint_values(self.get_joint_states(), joint_names)
-        self.movement_phase = self.get_movement_phase(current_joint_values, target_position) # Describes which joints need moving, flexion, rotation or all at home
+        self.movement_phase = self.get_movement_phase(
+            current_joint_values, target_position
+        )  # Describes which joints need moving, flexion, rotation or all at home
 
         try:
             if self.movement_phase == 1:
                 next_step = self.interpolate_partial(
-                    current_joint_values, target_position, self.flexion_joints_indicies, self.step_size_flexion_joints)
+                    current_joint_values,
+                    target_position,
+                    self.flexion_joints_indicies,
+                    self.step_size_flexion_joints,
+                )
                 return next_step
 
             elif self.movement_phase == 2:
                 next_step = self.interpolate_partial(
-                    current_joint_values, target_position, self.rotation_joints_indicies, self.step_size_rotation_joints)
+                    current_joint_values,
+                    target_position,
+                    self.rotation_joints_indicies,
+                    self.step_size_rotation_joints,
+                )
                 return next_step
 
             elif self.movement_phase == 0:
-                self.node.get_logger().info("All joints already at goal position", throttle_duration_sec = 10.0)
+                self.node.get_logger().info(
+                    "All joints already at goal position", throttle_duration_sec=10.0
+                )
                 return current_joint_values
 
         except KeyboardInterrupt:
