@@ -28,6 +28,7 @@ import sys
 import threading
 import yaml
 import argparse
+import time
 from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
@@ -35,7 +36,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import Joy, JointState
 from controller_manager_msgs.srv import ListControllers
 
-from dynaarm_gamepad_interface.controller_manager import ControllerManager
+from dynaarm_gamepad_interface.controller_manager import ControllerManager, SwitchController
 from dynaarm_gamepad_interface.utils.gamepad_feedback import GamepadFeedback
 
 
@@ -45,9 +46,19 @@ class GamepadInterface(Node):
     def __init__(self, mirror=False):
         super().__init__("gamepad_interface")
 
+        self.hardware_service = self.create_client(
+            SwitchController, '/controller_manager/switch_controller'
+        )
+        self.get_logger().info("Waiting for hardware service...")
+        while not self.hardware_service.wait_for_service(timeout_sec=10.0):
+            self.get_logger().info("Still waiting for hardware...")
+        self.get_logger().info("Hardware is ready! Starting gamepad interface.")
+
         self.controller_client = self.create_client(
             ListControllers, "/controller_manager/list_controllers"
         )
+
+        self.wait_for_any_joint_trajectory_controller_active()
 
         self.is_simulation = self._check_simulation_mode()
         self.joint_states = {}
@@ -107,8 +118,7 @@ class GamepadInterface(Node):
         Robustly detect the number of robots by analyzing joint name prefixes from /joint_states.
         """
         self.get_logger().info("Waiting for /joint_states to detect robots...")
-        import time
-
+        
         # Wait for joint_states to be populated
         timeout = 10.0
         start = time.time()
@@ -205,30 +215,35 @@ class GamepadInterface(Node):
             )
         self.get_logger().info("controller_manager is online.")
 
-    # def check_joint_trajectory_controllers(self):
-    #     req = ListControllers.Request()
-    #     future = self.controller_client.call_async(req)
-    #     rclpy.spin_until_future_complete(self, future)
-    #     if future.result() is not None:
-    #         controllers = future.result().controller
-    #         jtcs = [c for c in controllers if c.name.startswith("freeze_controller")]
-    #         count = len(jtcs)
-    #         self.get_logger().info(f"Found {count} robots(s).")
-    #         if count > 2:
-    #             self.get_logger().error(
-    #                 "More than 2 freeze_controllers found. Only up to two are supported."
-    #             )
-    #             rclpy.shutdown()
-    #             sys.exit(1)
-    #     else:
-    #         self.get_logger().error("Failed to get controllers from controller_manager.")
-    #         rclpy.shutdown()
-    #         sys.exit(1)
-
     def run(self):
         self._wait_for_controller_manager()
         self._check_robot_amount()
 
+    def wait_for_any_joint_trajectory_controller_active(self, timeout=60.0):
+        """
+        Wait until at least one controller with name starting with 'joint_trajectory_controller'
+        is in state 'active'.
+        """
+
+        if not self.controller_client.wait_for_service(timeout_sec=timeout):
+            self.get_logger().error("controller_manager/list_controllers service not available!")
+            raise RuntimeError("controller_manager/list_controllers service not available!")
+
+        start = time.time()
+        while rclpy.ok() and (time.time() - start) < timeout:
+            req = ListControllers.Request()
+            future = self.controller_client.call_async(req)
+            rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+            if future.result() is not None:
+                for ctrl in future.result().controller:
+                    self.get_logger().debug(f"Controller: {ctrl.name}, State: {ctrl.state}")
+                    if ctrl.name.startswith("joint_trajectory_controller") and ctrl.state == "inactive":
+                        self.get_logger().debug(f"Controller '{ctrl.name}' is inactive.")
+                        return
+            self.get_logger().debug("Waiting for a 'joint_trajectory_controller*' to be active...")
+            time.sleep(0.5)
+        self.get_logger().error("No active joint_trajectory_controller* after timeout!")
+        raise TimeoutError("No active joint_trajectory_controller* after timeout.")
 
 def main(args=None):
 
