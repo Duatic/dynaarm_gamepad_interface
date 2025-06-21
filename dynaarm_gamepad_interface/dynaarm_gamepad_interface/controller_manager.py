@@ -53,6 +53,7 @@ class ControllerManager:
         self.current_controller_index = -1
         self.current_active_controller = None
         self.is_freeze_active = True  # Assume freeze is active until proven otherwise
+        self.emergency_button_was_pressed = False
 
         self.controller_client = self.node.create_client(
             ListControllers, "/controller_manager/list_controllers"
@@ -130,12 +131,19 @@ class ControllerManager:
                     for controller in response.controller
                 )
 
-                if self.is_freeze_active:
+                if self.is_freeze_active and not self.emergency_button_was_pressed:
                     self.node.get_logger().warn(
                         "       ⚠️   Emergency stop is ACTIVE!   ⚠️           \n"
-                        "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s.",
-                        throttle_duration_sec=60.0,
+                        "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s."
                     )
+                    self.emergency_button_was_pressed = True
+                elif not self.is_freeze_active and self.emergency_button_was_pressed:
+                    self.node.get_logger().warn(
+                        "    ✅   Emergency stop is DEACTIVATED!   ✅           \n"
+                        f"\t\t\t\t\tNew active controller: {next(iter(active_controller))}"
+                    )
+                    self.emergency_button_was_pressed = False
+
 
                 if active_controller:
 

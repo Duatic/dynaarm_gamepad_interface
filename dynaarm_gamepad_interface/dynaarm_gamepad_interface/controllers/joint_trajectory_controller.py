@@ -120,12 +120,12 @@ class JointTrajectoryController(BaseController):
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
             commanded_positions = self.topic_to_commanded_positions[topic]
-            if msg.buttons[3]:
+            if msg.buttons[self.node.button_mapping["move_home"]]:
                 commanded_positions = self.move_to_position(joint_names, self.home_position.copy(), self.mirror_arm)
                 any_axis_active = True
                 if self.num_arms==2:
                     self.mirror_arm = not self.mirror_arm
-            elif msg.buttons[1]:
+            elif msg.buttons[self.node.button_mapping["move_sleep"]]:
                 if self.num_arms==2:
                     commanded_positions = self.move_to_position(joint_names, self.sleep_position.copy(), self.mirror_arm)
                     any_axis_active = True
@@ -231,22 +231,22 @@ class JointTrajectoryController(BaseController):
         try:
             if self.movement_phase == 1:
                 next_step = self.interpolate_partial(
-                    current_joint_values, target_position, self.flexion_joints_indicies, self.step_size_flexion_joints, joint_names)
+                    current_joint_values, target_position, self.flexion_joints_indicies, self.step_size_flexion_joints)
                 return next_step
 
             elif self.movement_phase == 2:
                 next_step = self.interpolate_partial(
-                    current_joint_values, target_position, self.rotation_joints_indicies, self.step_size_rotation_joints, joint_names)
+                    current_joint_values, target_position, self.rotation_joints_indicies, self.step_size_rotation_joints)
                 return next_step
 
             elif self.movement_phase == 0:
-                self.node.get_logger().info("All joints already at home position.", throttle_duration_sec = 10.0)
+                self.node.get_logger().info("All joints already at goal position", throttle_duration_sec = 10.0)
                 return current_joint_values
 
         except KeyboardInterrupt:
             print("Keyboard interrupt received, stopping home movement.")
 
-    def interpolate_partial(self, current, target, indices, step_size, joint_names):
+    def interpolate_partial(self, current, target, indices, step_size):
         next_step = current[:]
         for i in indices:
             delta = target[i] - current[i]
