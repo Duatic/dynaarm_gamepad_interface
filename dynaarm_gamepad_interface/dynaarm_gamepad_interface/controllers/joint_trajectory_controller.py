@@ -133,7 +133,7 @@ class JointTrajectoryController(BaseController):
             if abs(a - b) > self.tolerance:
                 return False
         return True
-    
+
     def mirror_position(self, joint_names, target_position):
         mirrored_indices = [
             i
@@ -153,27 +153,45 @@ class JointTrajectoryController(BaseController):
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
             commanded_positions = self.topic_to_commanded_positions[topic]
-            if msg.buttons[self.node.button_mapping["move_home"]]: # If the "move_home" button is pressed
-                if self.mirror_arm: # Mirror the goal positions
-                        target_home_position = self.mirror_position(joint_names, self.home_position.copy())
+            if msg.buttons[
+                self.node.button_mapping["move_home"]
+            ]:  # If the "move_home" button is pressed
+                if self.mirror_arm:  # Mirror the goal positions
+                    target_home_position = self.mirror_position(
+                        joint_names, self.home_position.copy()
+                    )
                 else:
-                        target_home_position = self.home_position.copy()
-                commanded_positions = self.move_to_position(joint_names, target_home_position) # Command the robot arm to move to the home position
+                    target_home_position = self.home_position.copy()
+                commanded_positions = self.move_to_position(
+                    joint_names, target_home_position
+                )  # Command the robot arm to move to the home position
                 any_axis_active = True
                 if self.num_arms == 2:
                     self.mirror_arm = not self.mirror_arm
-            elif msg.buttons[self.node.button_mapping["move_sleep"]]: # If the "move_sleep" button is pressed
+            elif msg.buttons[
+                self.node.button_mapping["move_sleep"]
+            ]:  # If the "move_sleep" button is pressed
                 if self.num_arms == 2:
-                    if self.mirror_arm: # Mirror the goal positions
-                        target_home_position = self.mirror_position(joint_names, self.home_position.copy())
-                        target_sleep_position = self.mirror_position(joint_names, self.sleep_position.copy())
+                    if self.mirror_arm:  # Mirror the goal positions
+                        target_home_position = self.mirror_position(
+                            joint_names, self.home_position.copy()
+                        )
+                        target_sleep_position = self.mirror_position(
+                            joint_names, self.sleep_position.copy()
+                        )
                     else:
                         target_home_position = self.home_position.copy()
                         target_sleep_position = self.sleep_position.copy()
-                    if not self.joint_angles_equal(commanded_positions, target_home_position):  # Move to home position first, then to sleep position if already at home
-                        commanded_positions = self.move_to_position(joint_names, target_home_position)
+                    if not self.joint_angles_equal(
+                        commanded_positions, target_home_position
+                    ):  # Move to home position first, then to sleep position if already at home
+                        commanded_positions = self.move_to_position(
+                            joint_names, target_home_position
+                        )
                     else:
-                        commanded_positions = self.move_to_position(joint_names, target_sleep_position)
+                        commanded_positions = self.move_to_position(
+                            joint_names, target_sleep_position
+                        )
                     any_axis_active = True
                     self.mirror_arm = not self.mirror_arm
             else:
