@@ -47,7 +47,7 @@ class GamepadInterface(Node):
         super().__init__("gamepad_interface")
 
         self.hardware_service = self.create_client(
-            SwitchController, '/controller_manager/switch_controller'
+            SwitchController, "/controller_manager/switch_controller"
         )
         self.get_logger().info("Waiting for hardware service...")
         while not self.hardware_service.wait_for_service(timeout_sec=10.0):
@@ -118,7 +118,7 @@ class GamepadInterface(Node):
         Robustly detect the number of robots by analyzing joint name prefixes from /joint_states.
         """
         self.get_logger().info("Waiting for /joint_states to detect robots...")
-        
+
         # Wait for joint_states to be populated
         timeout = 10.0
         start = time.time()
@@ -237,13 +237,17 @@ class GamepadInterface(Node):
             if future.result() is not None:
                 for ctrl in future.result().controller:
                     self.get_logger().debug(f"Controller: {ctrl.name}, State: {ctrl.state}")
-                    if ctrl.name.startswith("joint_trajectory_controller") and ctrl.state == "inactive":
+                    if (
+                        ctrl.name.startswith("joint_trajectory_controller")
+                        and ctrl.state == "inactive"
+                    ):
                         self.get_logger().debug(f"Controller '{ctrl.name}' is inactive.")
                         return
             self.get_logger().debug("Waiting for a 'joint_trajectory_controller*' to be active...")
             time.sleep(0.5)
         self.get_logger().error("No active joint_trajectory_controller* after timeout!")
         raise TimeoutError("No active joint_trajectory_controller* after timeout.")
+
 
 def main(args=None):
 
