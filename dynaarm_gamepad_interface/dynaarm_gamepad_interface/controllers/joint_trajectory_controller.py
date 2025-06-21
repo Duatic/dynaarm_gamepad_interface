@@ -66,7 +66,7 @@ class JointTrajectoryController(BaseController):
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
         self.num_arms = 0
-        self.tolerance = 0.02
+        self.tolerance = 0.05
 
         # Discover all topics and joint names, extract prefix
         for topic, types in found_topics:  #
