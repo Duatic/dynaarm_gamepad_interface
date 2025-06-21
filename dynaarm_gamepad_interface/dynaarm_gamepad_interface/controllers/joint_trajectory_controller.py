@@ -38,7 +38,7 @@ class JointTrajectoryController(BaseController):
         topic_prefix = "/joint_trajectory_controller"
         found_topics = self.get_topic_names_and_types(f"{topic_prefix}*/joint_trajectory")
 
-        self.sleep_position = [-1.5708, -0.6108, 0.0, 0.0, 0.0, 0.0]  # Default sleep position for all joints
+        self.sleep_position = [-1.5708, -0.541052, 0.0, 0.0, 0.0, 0.0]  # Default sleep position for all joints
         self.home_position = [-1.5708, 0.0, 0.0, 0.0, 0.0, 0.0]  # Default home position for all joints
         self.step_size_flexion_joints = 0.001  # joints 2,3,5
         self.step_size_rotation_joints= 0.002  # other joints
@@ -126,9 +126,9 @@ class JointTrajectoryController(BaseController):
                 if self.num_arms==2:
                     self.mirror_arm = not self.mirror_arm
             elif msg.buttons[1]:
-                commanded_positions = self.move_to_position(joint_names, self.sleep_position.copy(), self.mirror_arm)
-                any_axis_active = True
                 if self.num_arms==2:
+                    commanded_positions = self.move_to_position(joint_names, self.sleep_position.copy(), self.mirror_arm)
+                    any_axis_active = True
                     self.mirror_arm = not self.mirror_arm
             else:
                 for i, joint_name in enumerate(joint_names):
@@ -196,7 +196,7 @@ class JointTrajectoryController(BaseController):
                 )
             self.is_joystick_idle = True
 
-    def joints_at_home(self, current, indices, target_position, tolerance=0.05):
+    def joints_at_home(self, current, indices, target_position, tolerance=0.02):
         return all(abs(current[i] - target_position[i]) < tolerance for i in indices)
     
     # Returns the movement phase based on current joint positions
