@@ -237,9 +237,8 @@ class GamepadInterface(Node):
             if future.result() is not None:
                 for ctrl in future.result().controller:
                     self.get_logger().debug(f"Controller: {ctrl.name}, State: {ctrl.state}")
-                    if (
-                        ctrl.name.startswith("joint_trajectory_controller")
-                        and (ctrl.state == "inactive" or ctrl.state == "active")
+                    if ctrl.name.startswith("joint_trajectory_controller") and (
+                        ctrl.state == "inactive" or ctrl.state == "active"
                     ):
                         self.get_logger().debug(f"Controller '{ctrl.name}' is inactive.")
                         return
