@@ -71,7 +71,9 @@ class JointTrajectoryController(BaseController):
         # Discover all topics and joint names, extract prefix
         for topic, types in found_topics:  #
             self.topic_to_movement_phase = {}
-            self.topic_to_movement_phase[topic] = 0  # 0 at the beginning, describes which movement phase is finished
+            self.topic_to_movement_phase[topic] = (
+                0  # 0 at the beginning, describes which movement phase is finished
+            )
             self.num_arms += 1
             self.joint_trajectory_publishers[topic] = self.node.create_publisher(
                 JointTrajectory, topic, 10
@@ -333,7 +335,6 @@ class JointTrajectoryController(BaseController):
                     "All joints already at goal position", throttle_duration_sec=10.0
                 )
                 return current_joint_values
-            
 
         except KeyboardInterrupt:
             print("Keyboard interrupt received, stopping home movement.")
