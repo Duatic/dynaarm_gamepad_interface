@@ -70,6 +70,10 @@ class JointTrajectoryController(BaseController):
 
         # Discover all topics and joint names, extract prefix
         for topic, types in found_topics:  #
+            self.topic_to_movement_phase = {}
+            self.topic_to_movement_phase[topic] = (
+                0  # 0 at the beginning, describes which movement phase is finished
+            )
             self.num_arms += 1
             self.joint_trajectory_publishers[topic] = self.node.create_publisher(
                 JointTrajectory, topic, 10
@@ -124,7 +128,7 @@ class JointTrajectoryController(BaseController):
                 best_dict.get(joint, 0.0) for joint in joint_names
             ]
 
-    def joint_angles_equal(self, list1, list2):
+    def joint_angles_equal(self, list1, list2, topic):
         if len(list1) != len(list2):
             return False
         for i, (a, b) in enumerate(zip(list1, list2)):
@@ -132,6 +136,7 @@ class JointTrajectoryController(BaseController):
                 continue  # Skip index 1
             if abs(a - b) > self.tolerance:
                 return False
+        self.topic_to_movement_phase[topic] = 0  # Mark as finished
         return True
 
     def mirror_position(self, joint_names, target_position):
@@ -163,7 +168,7 @@ class JointTrajectoryController(BaseController):
                 else:
                     target_home_position = self.home_position.copy()
                 commanded_positions = self.move_to_position(
-                    joint_names, target_home_position
+                    joint_names, target_home_position, topic
                 )  # Command the robot arm to move to the home position
                 any_axis_active = True
                 if self.num_arms == 2:
@@ -183,18 +188,19 @@ class JointTrajectoryController(BaseController):
                         target_home_position = self.home_position.copy()
                         target_sleep_position = self.sleep_position.copy()
                     if not self.joint_angles_equal(
-                        commanded_positions, target_home_position
+                        commanded_positions, target_home_position, topic
                     ):  # Move to home position first, then to sleep position if already at home
                         commanded_positions = self.move_to_position(
-                            joint_names, target_home_position
+                            joint_names, target_home_position, topic
                         )
                     else:
                         commanded_positions = self.move_to_position(
-                            joint_names, target_sleep_position
+                            joint_names, target_sleep_position, topic
                         )
                     any_axis_active = True
                     self.mirror_arm = not self.mirror_arm
             else:
+                self.topic_to_movement_phase[topic] = 0  # Reset movement phase
                 for i, joint_name in enumerate(joint_names):
                     axis_val = 0.0
 
@@ -292,32 +298,39 @@ class JointTrajectoryController(BaseController):
                 return [joint_dict[name] for name in joint_names]
         return []  # Not found
 
-    def move_to_position(self, joint_names, target_position):
+    def move_to_position(self, joint_names, target_position, topic):
         current_joint_values = self.extract_joint_values(self.get_joint_states(), joint_names)
-        self.movement_phase = self.get_movement_phase(
-            current_joint_values, target_position
-        )  # Describes which joints need moving, flexion, rotation or all at home
 
         try:
-            if self.movement_phase == 1:
-                next_step = self.interpolate_partial(
-                    current_joint_values,
-                    target_position,
-                    self.flexion_joints_indicies,
-                    self.step_size_flexion_joints,
-                )
-                return next_step
+            if self.topic_to_movement_phase[topic] == 0:
+                if self.joints_at_home(
+                    current_joint_values, self.flexion_joints_indicies, target_position
+                ):
+                    self.topic_to_movement_phase[topic] = 1
+                else:
+                    next_step = self.interpolate_partial(
+                        current_joint_values,
+                        target_position,
+                        self.flexion_joints_indicies,
+                        self.step_size_flexion_joints,
+                    )
+                    return next_step
 
-            elif self.movement_phase == 2:
-                next_step = self.interpolate_partial(
-                    current_joint_values,
-                    target_position,
-                    self.rotation_joints_indicies,
-                    self.step_size_rotation_joints,
-                )
-                return next_step
+            if self.topic_to_movement_phase[topic] == 1:
+                if self.joints_at_home(
+                    current_joint_values, self.rotation_joints_indicies, target_position
+                ):
+                    self.topic_to_movement_phase[topic] = 2
+                else:
+                    next_step = self.interpolate_partial(
+                        current_joint_values,
+                        target_position,
+                        self.rotation_joints_indicies,
+                        self.step_size_rotation_joints,
+                    )
+                    return next_step
 
-            elif self.movement_phase == 0:
+            if self.topic_to_movement_phase[topic] == 2:
                 self.node.get_logger().info(
                     "All joints already at goal position", throttle_duration_sec=10.0
                 )
