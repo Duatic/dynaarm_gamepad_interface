@@ -33,6 +33,7 @@ from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
 
+from std_msgs.msg import Bool
 from sensor_msgs.msg import Joy, JointState
 from controller_manager_msgs.srv import ListControllers
 
@@ -79,6 +80,10 @@ class GamepadInterface(Node):
         self.last_menu_button_state = 0
 
         self.declare_parameter("mirror", mirror)
+
+        # Publishers
+        self.move_home_pub = self.create_publisher(Bool, "/move_home", 10)
+        self.move_sleep_pub = self.create_publisher(Bool, "/move_sleep", 10)
 
         # Subscribers
         self.create_subscription(Joy, "/joy", self.joy_callback, 10)
@@ -183,6 +188,16 @@ class GamepadInterface(Node):
 
         if not msg.buttons[self.button_mapping["dead_man_switch"]]:
             return
+        
+        if msg.buttons[self.button_mapping["move_home"]]:
+            self.move_home_pub.publish(Bool(data=True))
+        else:
+            self.move_home_pub.publish(Bool(data=False))
+
+        if msg.buttons[self.button_mapping["move_sleep"]]:
+            self.move_sleep_pub.publish(Bool(data=True))
+        else:
+            self.move_sleep_pub.publish(Bool(data=False))
 
         # Use dynamically loaded menu button index
         switch_controller_index = self.button_mapping["switch_controller"]
