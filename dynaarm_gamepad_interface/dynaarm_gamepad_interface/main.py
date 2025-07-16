@@ -191,16 +191,13 @@ class GamepadInterface(Node):
         
         if msg.buttons[self.button_mapping["move_home"]]:
             self.move_home_pub.publish(Bool(data=True))
-            self.get_logger().info("Move home command received.")
             return
         elif msg.buttons[self.button_mapping["move_sleep"]]:
-            self.get_logger().info("Move sleep command received.")
             self.move_sleep_pub.publish(Bool(data=True))
             return
         else:
             self.move_home_pub.publish(Bool(data=False))
             self.move_sleep_pub.publish(Bool(data=False))
-            self.get_logger().info("Move sleep command not received!!!!!!!!!!!!!")
 
         # Use dynamically loaded menu button index
         switch_controller_index = self.button_mapping["switch_controller"]
