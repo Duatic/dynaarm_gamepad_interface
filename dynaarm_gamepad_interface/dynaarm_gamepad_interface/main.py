@@ -78,6 +78,7 @@ class GamepadInterface(Node):
         self.latest_joy_msg = None
         self.joy_lock = threading.Lock()
         self.last_menu_button_state = 0
+        self.move_command_active = False  # Track if move_home or move_sleep was executed
 
         self.declare_parameter("mirror", mirror)
 
@@ -186,24 +187,53 @@ class GamepadInterface(Node):
         if msg is None or not self.joint_states:
             return  # Skip processing if no joystick input or no joint states
 
-        if not msg.buttons[self.button_mapping["dead_man_switch"]]:
+        # Check deadman switch first
+        deadman_active = msg.buttons[self.button_mapping["dead_man_switch"]]
+        
+        if not deadman_active:
+            # If deadman is not active, stop any move commands that were previously active
+            if self.move_command_active:
+                self.move_home_pub.publish(Bool(data=False))
+                self.move_sleep_pub.publish(Bool(data=False))
+                self.move_command_active = False
+                # Reset current controller to get fresh joint values
+                current_controller = self.controller_manager.get_current_controller()
+                if current_controller is not None:
+                    current_controller.reset()
             return
         
-        if msg.buttons[self.button_mapping["move_home"]]:
+        # Deadman switch is active, check for move commands
+        move_home_pressed = msg.buttons[self.button_mapping["move_home"]]
+        move_sleep_pressed = msg.buttons[self.button_mapping["move_sleep"]]
+        
+        if move_home_pressed:
             self.move_home_pub.publish(Bool(data=True))
+            self.move_command_active = True            
             return
-        elif msg.buttons[self.button_mapping["move_sleep"]]:
+        elif move_sleep_pressed:
             self.move_sleep_pub.publish(Bool(data=True))
+            self.move_command_active = True            
             return
         else:
-            self.move_home_pub.publish(Bool(data=False))
-            self.move_sleep_pub.publish(Bool(data=False))
+            # No move commands pressed, stop them if they were active
+            if self.move_command_active:
+                self.move_home_pub.publish(Bool(data=False))
+                self.move_sleep_pub.publish(Bool(data=False))
+                self.move_command_active = False
+                # Reset current controller after move commands are stopped
+                current_controller = self.controller_manager.get_current_controller()
+                if current_controller is not None:
+                    current_controller.reset()
 
         # Use dynamically loaded menu button index
         switch_controller_index = self.button_mapping["switch_controller"]
         # Ensure switching happens only on button press (down event) and not while held down
         if msg.buttons[switch_controller_index] == 1 and self.last_menu_button_state == 0:
             self.controller_manager.switch_to_next_controller()
+            # Reset current controller after switching
+            current_controller = self.controller_manager.get_current_controller()
+            if current_controller is not None:
+                current_controller.reset()
 
         # Wait until button is released (0) before allowing another switch
         # And don't execute anything else when the button is pressed
@@ -250,13 +280,15 @@ class GamepadInterface(Node):
             future = self.controller_client.call_async(req)
             rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
             if future.result() is not None:
-                for ctrl in future.result().controller:
-                    self.get_logger().debug(f"Controller: {ctrl.name}, State: {ctrl.state}")
-                    if ctrl.name.startswith("joint_trajectory_controller") and (
-                        ctrl.state == "inactive" or ctrl.state == "active"
-                    ):
-                        self.get_logger().debug(f"Controller '{ctrl.name}' is inactive.")
-                        return
+                result = future.result()
+                if hasattr(result, 'controller') and result.controller is not None:
+                    for ctrl in result.controller:
+                        self.get_logger().debug(f"Controller: {ctrl.name}, State: {ctrl.state}")
+                        if ctrl.name.startswith("joint_trajectory_controller") and (
+                            ctrl.state == "inactive" or ctrl.state == "active"
+                        ):
+                            self.get_logger().debug(f"Controller '{ctrl.name}' is inactive.")
+                            return
             self.get_logger().debug("Waiting for a 'joint_trajectory_controller*' to be active...")
             time.sleep(0.5)
         self.get_logger().error("No active joint_trajectory_controller* after timeout!")

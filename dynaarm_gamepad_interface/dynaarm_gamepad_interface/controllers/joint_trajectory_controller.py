@@ -41,6 +41,13 @@ class JointTrajectoryController(BaseController):
         self.topic_to_commanded_positions = {}
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
+        
+        # Dominant axis tracking for smoother joystick control
+        self.dominant_axis_threshold = 0.4  # Higher threshold for non-dominant axis
+        self.active_axes = {
+            "left_joystick": {"x": False, "y": False},
+            "right_joystick": {"x": False, "y": False}
+        }
 
         # Discover all topics and joint names, extract prefix
         for topic, types in found_topics:  #
@@ -107,21 +114,43 @@ class JointTrajectoryController(BaseController):
         any_axis_active = False
         deadzone = 0.1
 
+        # Get raw joystick values for dominant axis calculation
+        left_x = msg.axes[self.node.axis_mapping["left_joystick"]["x"]] if len(msg.axes) > self.node.axis_mapping["left_joystick"]["x"] else 0.0
+        left_y = msg.axes[self.node.axis_mapping["left_joystick"]["y"]] if len(msg.axes) > self.node.axis_mapping["left_joystick"]["y"] else 0.0
+        right_x = msg.axes[self.node.axis_mapping["right_joystick"]["x"]] if len(msg.axes) > self.node.axis_mapping["right_joystick"]["x"] else 0.0
+        right_y = msg.axes[self.node.axis_mapping["right_joystick"]["y"]] if len(msg.axes) > self.node.axis_mapping["right_joystick"]["y"] else 0.0
+
+        # Determine which axes are currently dominant
+        self._update_dominant_axes(left_x, left_y, right_x, right_y, deadzone)
+
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
             commanded_positions = self.topic_to_commanded_positions[topic]
             for i, joint_name in enumerate(joint_names):
                 axis_val = 0.0
+                effective_deadzone = deadzone
 
-                # Map axes/buttons as needed for each joint index
+                # Map axes/buttons as needed for each joint index and apply dominant axis logic
                 if i == 0 and len(msg.axes) > self.node.axis_mapping["left_joystick"]["x"]:
-                    axis_val = msg.axes[self.node.axis_mapping["left_joystick"]["x"]]
+                    axis_val = left_x
+                    # If left Y is dominant, increase deadzone for left X
+                    if self.active_axes["left_joystick"]["y"] and not self.active_axes["left_joystick"]["x"]:
+                        effective_deadzone = self.dominant_axis_threshold
                 elif i == 1 and len(msg.axes) > self.node.axis_mapping["left_joystick"]["y"]:
-                    axis_val = msg.axes[self.node.axis_mapping["left_joystick"]["y"]]
+                    axis_val = left_y
+                    # If left X is dominant, increase deadzone for left Y
+                    if self.active_axes["left_joystick"]["x"] and not self.active_axes["left_joystick"]["y"]:
+                        effective_deadzone = self.dominant_axis_threshold
                 elif i == 2 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["y"]:
-                    axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["y"]]
+                    axis_val = right_y
+                    # If right X is dominant, increase deadzone for right Y
+                    if self.active_axes["right_joystick"]["x"] and not self.active_axes["right_joystick"]["y"]:
+                        effective_deadzone = self.dominant_axis_threshold
                 elif i == 3 and len(msg.axes) > self.node.axis_mapping["right_joystick"]["x"]:
-                    axis_val = msg.axes[self.node.axis_mapping["right_joystick"]["x"]]
+                    axis_val = right_x
+                    # If right Y is dominant, increase deadzone for right X
+                    if self.active_axes["right_joystick"]["y"] and not self.active_axes["right_joystick"]["x"]:
+                        effective_deadzone = self.dominant_axis_threshold
                 elif i == 4:
                     left_trigger = msg.axes[self.node.axis_mapping["triggers"]["left"]]
                     right_trigger = msg.axes[self.node.axis_mapping["triggers"]["right"]]
@@ -141,7 +170,7 @@ class JointTrajectoryController(BaseController):
                 if self.mirror and joint_name in self.mirrored_joints:
                     axis_val = -axis_val
 
-                if abs(axis_val) > deadzone:
+                if abs(axis_val) > effective_deadzone:
                     current_position = self.node.joint_states.get(joint_name, 0.0)
                     commanded_positions[i] += axis_val * self.node.dt
                     offset = commanded_positions[i] - current_position
@@ -210,3 +239,11 @@ class JointTrajectoryController(BaseController):
         point.time_from_start.nanosec = nanosec
         trajectory_msg.points.append(point)
         publisher.publish(trajectory_msg)
+
+    def _update_dominant_axes(self, left_x, left_y, right_x, right_y, deadzone):
+        """Update which axes are currently active to determine dominant axis behavior."""
+        # Update active axes based on current input
+        self.active_axes["left_joystick"]["x"] = abs(left_x) > deadzone
+        self.active_axes["left_joystick"]["y"] = abs(left_y) > deadzone
+        self.active_axes["right_joystick"]["x"] = abs(right_x) > deadzone
+        self.active_axes["right_joystick"]["y"] = abs(right_y) > deadzone
