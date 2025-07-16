@@ -69,11 +69,11 @@ class GamepadInterface(Node):
         self.joint_pos_offset_tolerance = 0.1
 
         if self.is_simulation:
-            self.dt = 0.05  # 50ms for simulation (20Hz)
+            self.dt = 0.05
             self.get_logger().info("Using simulation timing: dt=0.05s (20Hz)")
         else:
-            self.dt = 0.001  # 0.5ms for real hardware (2000Hz)
-            self.get_logger().info("Using real hardware timing: dt=0.0005s (2000Hz)")
+            self.dt = 0.001
+            self.get_logger().info("Using real hardware timing: dt=0.001s (1000Hz)")
 
         self.latest_joy_msg = None
         self.joy_lock = threading.Lock()
