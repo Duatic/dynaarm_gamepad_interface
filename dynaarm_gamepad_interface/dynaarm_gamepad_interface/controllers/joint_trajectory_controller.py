@@ -83,6 +83,24 @@ class JointTrajectoryController(BaseController):
         if self.mirrored_joints:
             self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")
 
+    def reset(self):
+        """Reset commanded positions to current joint states for all topics."""
+        joint_states_list = self.get_joint_states()  # Returns a list of dicts
+
+        for topic, joint_names in self.topic_to_joint_names.items():
+            # Find the dict with the most matching joint names
+            best_dict = {}
+            max_found = 0
+            for d in joint_states_list:
+                found = sum(1 for joint in joint_names if joint in d)
+                if found > max_found:
+                    max_found = found
+                    best_dict = d
+            # Use best_dict for this topic
+            self.topic_to_commanded_positions[topic] = [
+                best_dict.get(joint, 0.0) for joint in joint_names
+            ]
+
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
         super().process_input(msg)  # For any base logging logic
