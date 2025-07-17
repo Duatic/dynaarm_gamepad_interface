@@ -21,6 +21,10 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+import rclpy
+
+from dynaarm_extensions.duatic_helpers.duatic_jtc_helper import DuaticJTCHelper
+from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -32,13 +36,28 @@ class JointTrajectoryController(BaseController):
 
     def __init__(self, node):
         super().__init__(node)
-        topic_prefix = "/joint_trajectory_controller"
-        found_topics = self.get_topic_names_and_types(f"{topic_prefix}*/joint_trajectory")
+
+        self.robot_helper = DuaticRobotsHelper(self.node)        
+        self.arms_count = self.robot_helper.get_robot_count()
+        while self.arms_count <= 0:
+            rclpy.spin_once(self.node, timeout_sec=1.0)
+            self.arms_count = self.robot_helper.get_robot_count()
+        
+        duatic_jtc_helper = DuaticJTCHelper(self.node, self.arms_count)
+        found_topics = duatic_jtc_helper.get_joint_trajectory_topics()
+        response = duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
+        self.topic_to_joint_names = response[0]
+        self.topic_to_commanded_positions = response[1]
+
+        # Create publishers for each joint trajectory topic
+        self.joint_trajectory_publishers = ({})
+
+        for topic in self.topic_to_joint_names.keys():
+            self.joint_trajectory_publishers[topic] = self.node.create_publisher(JointTrajectory, topic, 10)
+            self.node.get_logger().info(f"Created publisher for topic: {topic}")
 
         self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
-        self.joint_trajectory_publishers = {}
-        self.topic_to_joint_names = {}
-        self.topic_to_commanded_positions = {}
+                        
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
         
@@ -49,30 +68,6 @@ class JointTrajectoryController(BaseController):
             "right_joystick": {"x": False, "y": False}
         }
 
-        # Discover all topics and joint names, extract prefix
-        for topic, types in found_topics:  #
-            self.topic_to_movement_phase = {}
-            self.topic_to_movement_phase[topic] = (
-                0  # 0 at the beginning, describes which movement phase is finished
-            )
-            self.joint_trajectory_publishers[topic] = self.node.create_publisher(
-                JointTrajectory, topic, 10
-            )
-            # Extract prefix from topic name
-            # e.g. /joint_trajectory_controller_arm_1/joint_trajectory -> arm_1
-            topic_parts = topic[len(topic_prefix) :].split("/")
-            prefix = (
-                topic_parts[0][1:]
-                if topic_parts[0].startswith("_")
-                else topic_parts[0] if topic_parts[0] else ""
-            )
-            joint_names = self.get_param_values(topic.split("/")[1], "joints")
-            if joint_names:
-                self.topic_to_joint_names[topic] = joint_names
-                self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)
-                self.prefix_to_joints[prefix] = joint_names
-            else:
-                print("Parameter not found or empty for topic", topic)
         # Build mirrored joints: for each base, find all prefixes that have that joint
         self.mirrored_joints = []
         for base in self.MIRRORED_BASES:
