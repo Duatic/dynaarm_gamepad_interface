@@ -21,10 +21,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import rclpy
-from rclpy.parameter_client import AsyncParameterClient
-import re
-
 
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
