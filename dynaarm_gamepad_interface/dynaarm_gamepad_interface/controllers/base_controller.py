@@ -21,10 +21,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import rclpy
-from rclpy.parameter_client import AsyncParameterClient
-import re
-
 
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
@@ -33,31 +29,6 @@ class BaseController:
         self.node = node
         self.log_printed = False  # Track whether the log was printed
         self.arms_count = 0  # Count of arms, used for logging
-
-    def get_param_values(self, controller_ns, param_name):
-        """Retrieve parameter values from the node."""
-
-        param_client = AsyncParameterClient(self.node, controller_ns)
-        future = param_client.get_parameters([param_name])
-        rclpy.spin_until_future_complete(self.node, future)
-        if future.result() is not None and future.result().values:
-            param_value = future.result().values[0]
-            joint_names = list(param_value.string_array_value)
-            return joint_names
-
-    def get_topic_names_and_types(self, by_name):
-        """This base class retrieves topic names by a given name.
-        Args:
-            by_name (str): The name of the topic to retrieve.
-        Returns:
-            list: A list of topic names and types matching the given name.
-        """
-
-        pattern = re.compile(by_name.replace("*", ".*"))
-        topics_and_types = self.node.get_topic_names_and_types()
-        matches = [(topic, types) for topic, types in topics_and_types if pattern.fullmatch(topic)]
-        self.arms_count = len(matches)
-        return matches
 
     def get_joint_states(self):
         """Always return a list of joint state dicts, one per arm."""
