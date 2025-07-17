@@ -189,7 +189,7 @@ class GamepadInterface(Node):
 
         # Check deadman switch first
         deadman_active = msg.buttons[self.button_mapping["dead_man_switch"]]
-        
+
         if not deadman_active:
             # If deadman is not active, stop any move commands that were previously active
             if self.move_command_active:
@@ -201,18 +201,18 @@ class GamepadInterface(Node):
                 if current_controller is not None:
                     current_controller.reset()
             return
-        
+
         # Deadman switch is active, check for move commands
         move_home_pressed = msg.buttons[self.button_mapping["move_home"]]
         move_sleep_pressed = msg.buttons[self.button_mapping["move_sleep"]]
-        
+
         if move_home_pressed:
             self.move_home_pub.publish(Bool(data=True))
-            self.move_command_active = True            
+            self.move_command_active = True
             return
         elif move_sleep_pressed:
             self.move_sleep_pub.publish(Bool(data=True))
-            self.move_command_active = True            
+            self.move_command_active = True
             return
         else:
             # No move commands pressed, stop them if they were active
@@ -281,7 +281,7 @@ class GamepadInterface(Node):
             rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
             if future.result() is not None:
                 result = future.result()
-                if hasattr(result, 'controller') and result.controller is not None:
+                if hasattr(result, "controller") and result.controller is not None:
                     for ctrl in result.controller:
                         self.get_logger().debug(f"Controller: {ctrl.name}, State: {ctrl.state}")
                         if ctrl.name.startswith("joint_trajectory_controller") and (
