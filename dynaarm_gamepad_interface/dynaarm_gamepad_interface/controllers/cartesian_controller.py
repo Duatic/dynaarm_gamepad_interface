@@ -23,15 +23,9 @@
 
 
 from geometry_msgs.msg import PoseStamped
-from visualization_msgs.msg import Marker
-from tf_transformations import quaternion_from_euler, euler_from_quaternion
+
+from tf_transformations import quaternion_from_euler, quaternion_multiply
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
-from dynaarm_gamepad_interface.utils.tf_helper import TFHelper
-from dynaarm_gamepad_interface.utils.marker_visualizer import (
-    MarkerHelper,
-    MarkerProperties,
-    MarkerData,
-)
 
 
 class CartesianController(BaseController):
@@ -42,25 +36,94 @@ class CartesianController(BaseController):
 
         self.base_frame = "base"
         self.ee_frame = "flange"
+        self.current_pose = None
+        self.scale = 0.005
 
         self.controller_base_name = "joint_trajectory_controller"
 
         # Publisher for Cartesian pose commands
         self.cartesian_publisher = self.node.create_publisher(
-            PoseStamped, "/cartesian_motion_controller/target_frame", 10
+            PoseStamped, "/duatic_pose_controller/target_frame", 10
         )
 
     def reset(self):
         """Resets the current_pose to the current one"""
 
-        pass
+        current_joint_values = self.robot_helper.get_joint_states()            
+        self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
 
     def process_input(self, msg):
         """Processes joystick input and updates Cartesian position."""
         super().process_input(msg)
 
-        pass
+        if self.current_pose is None:
+            current_joint_values = self.robot_helper.get_joint_states()            
+            self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
 
-    def publish_cartesian_command(self):
-        """Publishes a new Cartesian target pose."""
-        pass
+        # --- Translation ---
+        x = msg.axes[0]
+        y = msg.axes[1]
+        z = msg.axes[3]
+
+        # --- Rotation ---
+        roll = msg.axes[2]                
+        pitch = float(msg.buttons[7]) - float(msg.buttons[8])        
+        yaw = float(msg.axes[4] > 0.5) - float(msg.axes[5] > 0.5)
+
+        # --- Prioritization ---        
+        # Either x or y can be active, but not both and if pitch is pressed the axis are ignored
+        if abs(pitch) > 1e-4:
+            lx, ly = 0.0, 0.0
+        elif abs(x) > abs(y) and abs(x) > 1e-4:
+            lx, ly = x, 0.0
+        elif abs(y) > 1e-4:
+            lx, ly = 0.0, y
+        else:
+            lx, ly = 0.0, 0.0
+
+        # Or either z or roll can be active, but not both
+        if abs(pitch) > 1e-4:
+            lz, d_roll = 0.0, 0.0
+        elif abs(z) > abs(roll) and abs(z) > 1e-4:
+            lz, d_roll = z, 0.0            
+        elif abs(roll) > 1e-4:
+            lz, d_roll = 0.0, roll
+        else:
+            lz, d_roll = 0.0, 0.0
+        
+        # Scaling
+        linear_speed = 0.2
+        angular_speed = 0.3
+
+        # Update Position
+        self.current_pose.pose.position.x += lx * linear_speed * self.scale
+        self.current_pose.pose.position.y += ly * linear_speed * self.scale
+        self.current_pose.pose.position.z += lz * linear_speed * self.scale
+
+        # Update Orientation (Apply Incremental Rotations)
+        d_roll *= angular_speed * self.scale
+        pitch *= angular_speed * self.scale
+        yaw *= angular_speed * self.scale
+
+        q_roll = quaternion_from_euler(d_roll, 0, 0)
+        q_pitch = quaternion_from_euler(0, pitch, 0)
+        q_yaw = quaternion_from_euler(0, 0, yaw)
+
+        current_q = self.current_pose.pose.orientation
+        q_current = [current_q.x, current_q.y, current_q.z, current_q.w]
+        q_new = quaternion_multiply(q_current, q_roll)
+        q_new = quaternion_multiply(q_new, q_pitch)
+        q_new = quaternion_multiply(q_new, q_yaw)
+        norm = (q_new[0] ** 2 + q_new[1] ** 2 + q_new[2] ** 2 + q_new[3] ** 2) ** 0.5
+        q_new = [q / norm for q in q_new]
+
+        self.current_pose.pose.orientation.x = q_new[0]
+        self.current_pose.pose.orientation.y = q_new[1]
+        self.current_pose.pose.orientation.z = q_new[2]
+        self.current_pose.pose.orientation.w = q_new[3]
+
+        self.current_pose.header.frame_id = self.base_frame
+        self.current_pose.header.stamp = self.node.get_clock().now().to_msg()
+
+        self.marker_helper.create_pose_markers(self.current_pose, self.base_frame)
+        self.cartesian_publisher.publish(self.current_pose)

@@ -22,7 +22,8 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
-
+from dynaarm_extensions.duatic_helpers.duatic_pinocchio_helper import DuaticPinocchioHelper
+from dynaarm_extensions.duatic_helpers.duatic_marker_helper import DuaticMarkerHelper
 
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
@@ -33,7 +34,11 @@ class BaseController:
         self.arms_count = 0  # Count of arms, used for logging            
         self.controller_base_name = None
         self.joint_pos_offset_tolerance = 0.1
+
+        # TODO This is now called in every controller, but should be called only once in the controller manager
         self.robot_helper = DuaticRobotsHelper(self.node)
+        self.pin_helper = DuaticPinocchioHelper(self.node)
+        self.marker_helper = DuaticMarkerHelper(self.node)
 
     def get_low_level_controller(self):
         """ Returns the name of the low-level controller this controller is based on. """
