@@ -27,5 +27,10 @@ from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 class FreedriveController(BaseController):
     """Handles freedrive mode."""
 
+    def __init__(self, node):
+        super().__init__(node)
+        
+        self.controller_base_name = "freedrive_controller"
+
     def process_input(self, joy_msg):
         pass

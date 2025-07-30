@@ -21,6 +21,8 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
+
 
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
@@ -28,11 +30,26 @@ class BaseController:
     def __init__(self, node):
         self.node = node
         self.log_printed = False  # Track whether the log was printed
-        self.arms_count = 0  # Count of arms, used for logging
+        self.arms_count = 0  # Count of arms, used for logging            
+        self.controller_base_name = None
+        self.joint_pos_offset_tolerance = 0.1
+        self.robot_helper = DuaticRobotsHelper(self.node)
+
+    def get_low_level_controller(self):
+        """ Returns the name of the low-level controller this controller is based on. """
+        return self.controller_base_name
+
+    def get_joint_value_from_states(self, joint_name):
+        joint_states_list = self.get_joint_states()
+        for d in joint_states_list:
+            if joint_name in d:
+                return d[joint_name]
+        return 0.0  # or None if you prefer
 
     def get_joint_states(self):
         """Always return a list of joint state dicts, one per arm."""
-        joint_states = self.node.joint_states
+        joint_states = self.robot_helper.get_joint_states()
+
         if self.arms_count <= 1:
             return [joint_states]  # Always a list, even for single arm
 

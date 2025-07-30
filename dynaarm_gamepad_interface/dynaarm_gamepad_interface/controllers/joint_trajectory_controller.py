@@ -24,7 +24,6 @@
 import rclpy
 
 from dynaarm_extensions.duatic_helpers.duatic_jtc_helper import DuaticJTCHelper
-from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -37,7 +36,8 @@ class JointTrajectoryController(BaseController):
     def __init__(self, node):
         super().__init__(node)
 
-        self.robot_helper = DuaticRobotsHelper(self.node)
+        self.controller_base_name = "joint_trajectory_controller"
+
         self.arms_count = self.robot_helper.get_robot_count()
         while self.arms_count <= 0:
             rclpy.spin_once(self.node, timeout_sec=1.0)
@@ -108,6 +108,7 @@ class JointTrajectoryController(BaseController):
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
         super().process_input(msg)  # For any base logging logic
+        
         any_axis_active = False
         deadzone = 0.1
 
@@ -191,18 +192,18 @@ class JointTrajectoryController(BaseController):
                 if self.mirror and joint_name in self.mirrored_joints:
                     axis_val = -axis_val
 
-                if abs(axis_val) > effective_deadzone:
-                    current_position = self.node.joint_states.get(joint_name, 0.0)
+                if abs(axis_val) > effective_deadzone:                    
+                    current_position = self.get_joint_value_from_states(joint_name)
                     commanded_positions[i] += axis_val * self.node.dt
                     offset = commanded_positions[i] - current_position
-                    if offset > self.node.joint_pos_offset_tolerance:
+                    if offset > self.joint_pos_offset_tolerance:
                         commanded_positions[i] = (
-                            current_position + self.node.joint_pos_offset_tolerance
+                            current_position + self.joint_pos_offset_tolerance
                         )
                         self.node.gamepad_feedback.send_feedback(intensity=1.0)
-                    elif offset < -self.node.joint_pos_offset_tolerance:
+                    elif offset < -self.joint_pos_offset_tolerance:
                         commanded_positions[i] = (
-                            current_position - self.node.joint_pos_offset_tolerance
+                            current_position - self.joint_pos_offset_tolerance
                         )
                         self.node.gamepad_feedback.send_feedback(intensity=1.0)
                     any_axis_active = True
@@ -230,12 +231,10 @@ class JointTrajectoryController(BaseController):
             self.is_joystick_idle = True
 
     def publish_joint_trajectory(
-        self, target_positions, publisher, joint_names=None, speed_percentage=1.0
+        self, target_positions, publisher, joint_names, speed_percentage=1.0
     ):
         """Publishes a joint trajectory message for the given positions using the provided publisher."""
-        if joint_names is None:
-            joint_names = list(self.node.joint_states.keys())
-
+        
         if not joint_names:
             self.node.get_logger().error("No joint names available. Cannot publish trajectory.")
             return

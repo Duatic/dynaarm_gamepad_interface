@@ -42,9 +42,3 @@ gamepad_node:
       triggers:
         left: 4
         right: 5
-
-    controllers:
-      joint_trajectory_controller:
-        whitelisted: true
-      freedrive_controller:
-        whitelisted: true

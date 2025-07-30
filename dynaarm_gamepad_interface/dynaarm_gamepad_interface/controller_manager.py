@@ -26,11 +26,8 @@
 
 from controller_manager_msgs.srv import ListControllers, SwitchController
 
-
-from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
-    JointTrajectoryController,
-)
-from dynaarm_gamepad_interface.controllers.position_controller import PositionController
+from dynaarm_extensions.duatic_helpers.duatic_controller_helper import DuaticControllerHelper
+from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import JointTrajectoryController
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
 
@@ -38,22 +35,8 @@ from dynaarm_gamepad_interface.controllers.freedrive_controller import Freedrive
 class ControllerManager:
     """Handle controllers"""
 
-    # Controller name → Class mapping
-    CONTROLLER_CLASS_MAP = {
-        "freedrive_controller": FreedriveController,
-        "joint_trajectory_controller": JointTrajectoryController,
-        "cartesian_motion_controller": CartesianController,
-        "position_controller": PositionController,
-    }
-
-    def __init__(self, node, controllers_config):
+    def __init__(self, node):
         self.node = node
-
-        self.controllers = {}
-        self.current_controller_index = -1
-        self.current_active_controller = None
-        self.is_freeze_active = True  # Assume freeze is active until proven otherwise
-        self.emergency_button_was_pressed = False
 
         self.controller_client = self.node.create_client(
             ListControllers, "/controller_manager/list_controllers"
@@ -61,187 +44,110 @@ class ControllerManager:
         self.switch_controller_client = self.node.create_client(
             SwitchController, "/controller_manager/switch_controller"
         )
+        
+        self.active_high_level_controller_index = -1
+        self.active_low_level_controller = None
+        self.is_freeze_active = True  # Assume freeze is active until proven otherwise
+        self.emergency_button_was_pressed = False        
 
-        self.controller_whitelist = [
-            name for name, props in controllers_config.items() if props["whitelisted"]
-        ]
+        self.all_high_level_controllers = {
+            0: FreedriveController(self.node),
+            1: JointTrajectoryController(self.node),
+            2: CartesianController(self.node),
+        }
 
-        # Instantiate controllers dynamically
-        for controller_name in self.controller_whitelist:
-            if controller_name in self.CONTROLLER_CLASS_MAP:
-                self.controllers[controller_name] = self.CONTROLLER_CLASS_MAP[controller_name](
-                    self.node
-                )
-            else:
-                self.node.get_logger().warn(
-                    f"Controller '{controller_name}' is in whitelist but has no mapped class."
-                )
-
-        self.node.get_logger().info(f"Loaded controllers: {list(self.controllers.keys())}")
-        self.node.create_timer(0.5, self.check_active_controllers)
-
-        # Dict: base_name -> list of found controllers with that base
-        self.found_controllers_by_base = {base: [] for base in self.controller_whitelist}
+        self.duatic_controller_helper = DuaticControllerHelper(self.node)
+        
+        self.node.create_timer(0.2, self.check_active_low_level_controllers)
 
     def get_current_controller(self):
-        if self.controller_whitelist:
-            controller_name = self.controller_whitelist[self.current_controller_index]
-            return self.controllers.get(controller_name, None)
-        return None
+        if self.active_high_level_controller_index < 0:
+            return None
 
-    def check_active_controllers(self):
+        return self.all_high_level_controllers[self.active_high_level_controller_index]
+
+    def wait_for_controller_loaded(self, controller_name, timeout=60.0):
+        return self.duatic_controller_helper.wait_for_controller_loaded(controller_name, timeout)
+
+    def wait_for_controller_data(self):
+        return self.duatic_controller_helper.wait_for_controller_data()
+
+    def check_active_low_level_controllers(self):
         """Checks which controllers are active and updates the state machine."""
-        if not self.controller_client.wait_for_service(timeout_sec=2.0):
+
+        self.is_freeze_active = self.duatic_controller_helper.is_freeze_active()
+
+        if self.is_freeze_active and not self.emergency_button_was_pressed:            
             self.node.get_logger().warn(
-                "Controller manager service not available.", throttle_duration_sec=10.0
+            "       ⚠️   Emergency stop is ACTIVE!   ⚠️           \n"
+            "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s.")
+            self.emergency_button_was_pressed = True
+            self.is_freeze_active = True
+        elif not self.is_freeze_active and self.emergency_button_was_pressed:
+            self.node.get_logger().warn(
+            "    ✅   Emergency stop is DEACTIVATED!   ✅           ")
+            self.is_freeze_active = False
+            self.emergency_button_was_pressed = False
+
+        active_low_level_controller = self.duatic_controller_helper.get_active_controller()
+        
+        if not active_low_level_controller:
+            self.node.get_logger().warn(
+                "No active controller found.", throttle_duration_sec=30.0
             )
+            self.active_low_level_controller_index = -1
+            self.active_high_level_controller_index = -1
             return
 
-        req = ListControllers.Request()
-        future = self.controller_client.call_async(req)
+        if active_low_level_controller != self.active_low_level_controller:
+            self.active_low_level_controller = active_low_level_controller
 
-        def callback(future):
-            try:
-                response = future.result()
-
-                # Reset found controllers by base
-                for base in self.found_controllers_by_base:
-                    self.found_controllers_by_base[base] = []
-
-                # Populate found controllers by base name
-                for controller in response.controller:
-                    for base in self.controller_whitelist:
-                        if controller.name.startswith(base):
-                            self.found_controllers_by_base[base].append(
-                                {controller.name: controller.state == "active"}
-                            )
-
-                # Filter only whitelisted active controllers
-                active_controller = {
-                    base
-                    for base, controllers in self.found_controllers_by_base.items()
-                    for controller_dict in controllers
-                    for name, is_active in controller_dict.items()
-                    if is_active
-                }
-
-                # Check if `freeze_controller` (E-Stop) is active, even though it's NOT in the whitelist
-                self.is_freeze_active = any(
-                    controller.name.startswith("freeze_controller") and controller.state == "active"
-                    for controller in response.controller
-                )
-
-                if self.is_freeze_active and not self.emergency_button_was_pressed:
-                    self.node.get_logger().warn(
-                        "       ⚠️   Emergency stop is ACTIVE!   ⚠️           \n"
-                        "\t\t\t\t\tTo deactivate: Hold Left Stick Button (LSB) or L1 for ~4s."
-                    )
-                    self.emergency_button_was_pressed = True
-                elif not self.is_freeze_active and self.emergency_button_was_pressed:
-                    self.node.get_logger().warn(
-                        "    ✅   Emergency stop is DEACTIVATED!   ✅           "
-                    )
-                    self.emergency_button_was_pressed = False
-
-                if active_controller:
-
-                    # Get first active controller
-                    current_active_controller = next(iter(active_controller))
-
-                    # If the current active controller is in the whitelist, update the state
-                    if (
-                        current_active_controller in self.found_controllers_by_base
-                        and self.found_controllers_by_base[current_active_controller]
-                    ):
-                        active_controller_index = self.controller_whitelist.index(
-                            current_active_controller
-                        )
-
-                        if self.current_controller_index != active_controller_index:
-
-                            self.controllers[current_active_controller].reset()
-                            self.current_controller_index = active_controller_index
-                            self.current_active_controller = current_active_controller
-
-                            self.node.get_logger().info(
-                                f"New active controller: {current_active_controller}"
-                            )
-
-                else:
-                    self.node.get_logger().warn(
-                        "No active controller found.", throttle_duration_sec=30.0
-                    )
-                    self.current_controller_index = -1
-
-            except Exception as e:
-                self.node.get_logger().error(
-                    f"Failed to list controllers: {e}", throttle_duration_sec=10.0
-                )
-
-        future.add_done_callback(callback)
+            # Only set high-level controller if none was set before
+            if self.active_high_level_controller_index == -1:
+                for idx, high_level_controller in self.all_high_level_controllers.items():
+                    if hasattr(high_level_controller, "get_low_level_controller"):
+                        if high_level_controller.get_low_level_controller() == self.active_low_level_controller:
+                            self.active_high_level_controller_index = idx
+                            high_level_controller.reset()  # Reset the controller to get fresh joint values
+                            self.node.get_logger().info(f"Activated high level controller index: {idx} for low level controller: {self.active_low_level_controller}")
+                            break
 
     def switch_to_next_controller(self):
-        """Switch to the next available controller in the whitelist, using only found controllers."""
-        if not self.switch_controller_client.wait_for_service(timeout_sec=2.0):
+        """Switch to the next high-level controller. Only switch low-level controller if needed."""
+
+        num_bases = len(self.all_high_level_controllers)
+        if num_bases <= 0:
+            return
+
+        next_high_level_controller_index = (self.active_high_level_controller_index + 1) % num_bases
+        next_high_level_controller = self.all_high_level_controllers[next_high_level_controller_index]
+        next_low_level_controller = next_high_level_controller.get_low_level_controller()
+        
+        if next_low_level_controller is None:
             self.node.get_logger().warn(
-                "SwitchController service not available.", throttle_duration_sec=10.0
+                "No low-level controller defined for the next high-level controller."
             )
             return
 
-        # Try to find the next base controller in the whitelist that has real controllers
-        num_bases = len(self.controller_whitelist)
-        for i in range(1, num_bases + 1):
-            new_base_index = (self.current_controller_index + i) % num_bases
-            new_base = self.controller_whitelist[new_base_index]
-            real_controllers = [
-                name
-                for controllers in self.found_controllers_by_base.get(new_base, [])
-                for name, _ in controllers.items()
-            ]
+        # Always update the high-level controller index
+        self.active_high_level_controller_index = next_high_level_controller_index
+        self.node.get_logger().info(
+            f"Switching to high-level controller index: {next_high_level_controller_index} ({next_high_level_controller.__class__.__name__})"
+        )
 
-            if real_controllers:
-                break
-
-            self.node.get_logger().debug(
-                f"Real controllers for base '{new_base}': {real_controllers}"
-            )
-        else:
-            self.node.get_logger().warn(
-                "No real controllers found for any base in the whitelist.",
-                throttle_duration_sec=10.0,
+        # Only switch low-level controller if it is different
+        if next_low_level_controller == self.duatic_controller_helper.active_low_level_controller:
+            self.node.get_logger().info(
+                f"Already using controller: {next_low_level_controller}"
             )
             return
-
-        req = SwitchController.Request()
-        req.activate_controllers = real_controllers
 
         # Deactivate all child controllers of the current active base (if any)
-        req.deactivate_controllers = []
-        if self.current_controller_index >= 0:
-            current_base = self.controller_whitelist[self.current_controller_index]
-            current_real_controllers = [
-                name
-                for controllers in self.found_controllers_by_base.get(current_base, [])
-                for name, _ in controllers.items()
-            ]
-            req.deactivate_controllers.extend(current_real_controllers)
+        activate_controllers = []
+        deactivate_controllers = []
 
-        req.strictness = 1
+        if self.duatic_controller_helper.active_low_level_controller is not None:
+            deactivate_controllers.append(self.duatic_controller_helper.active_low_level_controller)
+        activate_controllers.append(next_low_level_controller)
 
-        future = self.switch_controller_client.call_async(req)
-
-        def callback(future):
-            try:
-                response = future.result()
-                if response.ok:
-                    self.check_active_controllers()
-                else:
-                    self.node.get_logger().error(
-                        f"Failed to switch to {new_base}", throttle_duration_sec=10.0
-                    )
-            except Exception as e:
-                self.node.get_logger().error(
-                    f"Error switching controllers: {e}", throttle_duration_sec=10.0
-                )
-
-        future.add_done_callback(callback)
+        self.duatic_controller_helper.switch_controller(activate_controllers, deactivate_controllers)
