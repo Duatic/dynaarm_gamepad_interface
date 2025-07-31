@@ -47,7 +47,7 @@ class ControllerManager:
         )
         
         self.active_high_level_controller_index = -1
-        self.active_low_level_controller = None
+        self.active_low_level_controllers = []
         self.is_freeze_active = True  # Assume freeze is active until proven otherwise
         self.emergency_button_was_pressed = False        
 
@@ -90,28 +90,35 @@ class ControllerManager:
             self.is_freeze_active = False
             self.emergency_button_was_pressed = False
 
-        active_low_level_controller = self.duatic_controller_helper.get_active_controller()
-        
-        if not active_low_level_controller:
+        active_low_level_controllers = self.duatic_controller_helper.get_active_controllers()
+        if not active_low_level_controllers or len(active_low_level_controllers) <= 0:
             self.node.get_logger().warn(
                 "No active controller found.", throttle_duration_sec=30.0
             )
-            self.active_low_level_controller_index = -1
             self.active_high_level_controller_index = -1
+            self.active_low_level_controllers.clear()
+            return
+        
+        # Compare the lists of active_low_level_controllers
+        if active_low_level_controllers == self.active_low_level_controllers:
+            self.node.get_logger().debug(f"Active low-level controllers remain unchanged: {active_low_level_controllers}")
             return
 
-        if active_low_level_controller != self.active_low_level_controller:
-            self.active_low_level_controller = active_low_level_controller
-
-            # Only set high-level controller if none was set before
-            if self.active_high_level_controller_index == -1:
-                for idx, high_level_controller in self.all_high_level_controllers.items():
-                    if hasattr(high_level_controller, "get_low_level_controller"):
-                        if high_level_controller.get_low_level_controller() == self.active_low_level_controller:
-                            self.active_high_level_controller_index = idx
-                            high_level_controller.reset()  # Reset the controller to get fresh joint values
-                            self.node.get_logger().info(f"Activated high level controller index: {idx} for low level controller: {self.active_low_level_controller}")
-                            break
+        # Only set high-level controller if none was set before
+        if self.active_high_level_controller_index >= 0:
+            self.node.get_logger().debug(f"High level controller already set: {self.active_high_level_controller_index}")
+            return
+                
+        for idx, high_level_controller in self.all_high_level_controllers.items():
+            if hasattr(high_level_controller, "get_low_level_controllers"):
+                required = set(high_level_controller.get_low_level_controllers())
+                active = set(active_low_level_controllers)                
+                if required == active:
+                    self.active_high_level_controller_index = idx
+                    high_level_controller.reset()  # Reset the controller to get fresh joint values
+                    self.node.get_logger().info(f"Activated high level controller index: {idx} for low level controllers: {active_low_level_controllers}")
+                    break
+                
 
     def switch_to_next_controller(self):
         """Switch to the next high-level controller. Only switch low-level controller if needed."""
@@ -122,9 +129,10 @@ class ControllerManager:
 
         next_high_level_controller_index = (self.active_high_level_controller_index + 1) % num_bases
         next_high_level_controller = self.all_high_level_controllers[next_high_level_controller_index]
-        next_low_level_controller = next_high_level_controller.get_low_level_controller()
-        
-        if next_low_level_controller is None:
+        next_low_level_controllers = next_high_level_controller.get_low_level_controllers()
+        active_low_level_controllers = self.duatic_controller_helper.get_active_controllers()
+
+        if not next_low_level_controllers:
             self.node.get_logger().warn(
                 "No low-level controller defined for the next high-level controller."
             )
@@ -135,20 +143,29 @@ class ControllerManager:
         self.node.get_logger().info(
             f"Switching to high-level controller index: {next_high_level_controller_index} ({next_high_level_controller.__class__.__name__})"
         )
+        
+        controllers_to_activate = []        
+        for controller in next_low_level_controllers:
+            # Only switch low-level controller if it is different
+            if controller in active_low_level_controllers:
+                self.node.get_logger().debug(
+                    f"Already using controller: {controller}"
+                )
+            else:
+                controllers_to_activate.append(controller)
+                self.node.get_logger().debug(
+                    f"Will activate controller: {controller}"
+                )
 
-        # Only switch low-level controller if it is different
-        if next_low_level_controller == self.duatic_controller_helper.active_low_level_controller:
-            self.node.get_logger().debug(
-                f"Already using controller: {next_low_level_controller}"
-            )
-            return
+        controllers_to_deactivate = []
+        for controller in active_low_level_controllers:
+            if controller not in next_low_level_controllers:
+                controllers_to_deactivate.append(controller)
+                self.node.get_logger().debug(
+                    f"Will deactivate controller: {controller}"
+                )
 
-        # Deactivate all child controllers of the current active base (if any)
-        activate_controllers = []
-        deactivate_controllers = []
+        self.duatic_controller_helper.switch_controller(controllers_to_activate, controllers_to_deactivate)
 
-        if self.duatic_controller_helper.active_low_level_controller is not None:
-            deactivate_controllers.append(self.duatic_controller_helper.active_low_level_controller)
-        activate_controllers.append(next_low_level_controller)
-
-        self.duatic_controller_helper.switch_controller(activate_controllers, deactivate_controllers)
+        for idx, high_level_controller in self.all_high_level_controllers.items():
+            high_level_controller.reset()

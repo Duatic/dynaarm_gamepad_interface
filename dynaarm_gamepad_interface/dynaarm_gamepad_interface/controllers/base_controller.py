@@ -30,14 +30,14 @@ class BaseController:
         self.node = node
         self.log_printed = False  # Track whether the log was printed
         self.arms_count = 0  # Count of arms, used for logging            
-        self.controller_base_name = None
+        self.needed_low_level_controllers = None
         self.joint_pos_offset_tolerance = 0.1
 
         self.duatic_robots_helper = duatic_robots_helper
 
-    def get_low_level_controller(self):
+    def get_low_level_controllers(self):
         """ Returns the name of the low-level controller this controller is based on. """
-        return self.controller_base_name
+        return self.needed_low_level_controllers
 
     def get_joint_value_from_states(self, joint_name):
         joint_states_list = self.get_joint_states()

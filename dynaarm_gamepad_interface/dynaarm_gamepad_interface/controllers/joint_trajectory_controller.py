@@ -36,7 +36,7 @@ class JointTrajectoryController(BaseController):
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
 
-        self.controller_base_name = "joint_trajectory_controller"
+        self.needed_low_level_controllers = ["joint_trajectory_controller"]        
 
         self.arms_count = self.duatic_robots_helper.get_robot_count()
         while self.arms_count <= 0:

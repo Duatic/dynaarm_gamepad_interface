@@ -42,7 +42,7 @@ class CartesianController(BaseController):
         self.current_pose = None
         self.scale = 0.005
 
-        self.controller_base_name = "joint_trajectory_controller"
+        self.needed_low_level_controllers = ["joint_trajectory_controller", "dynaarm_pose_controller"]        
 
         # Publisher for Cartesian pose commands
         self.cartesian_publisher = self.node.create_publisher(
@@ -57,6 +57,7 @@ class CartesianController(BaseController):
 
         current_joint_values = self.duatic_robots_helper.get_joint_states()            
         self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
+        self.marker_helper.clear_markers()
 
     def process_input(self, msg):
         """Processes joystick input and updates Cartesian position."""

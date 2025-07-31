@@ -30,7 +30,7 @@ class FreedriveController(BaseController):
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
         
-        self.controller_base_name = "freedrive_controller"
+        self.needed_low_level_controllers = ["freedrive_controller"]        
 
     def process_input(self, joy_msg):
         pass
