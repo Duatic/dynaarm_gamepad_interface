@@ -40,7 +40,7 @@ class CartesianController(BaseController):
         self.base_frame = "base"
         self.ee_frame = "flange"
         self.current_pose = None
-        self.scale = 0.005
+        self.scale = 0.002
 
         self.needed_low_level_controllers = [
             "joint_trajectory_controller",
