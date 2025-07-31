@@ -22,23 +22,18 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
-from dynaarm_extensions.duatic_helpers.duatic_pinocchio_helper import DuaticPinocchioHelper
-from dynaarm_extensions.duatic_helpers.duatic_marker_helper import DuaticMarkerHelper
 
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
 
-    def __init__(self, node):
+    def __init__(self, node, duatic_robots_helper: DuaticRobotsHelper):
         self.node = node
         self.log_printed = False  # Track whether the log was printed
         self.arms_count = 0  # Count of arms, used for logging            
         self.controller_base_name = None
         self.joint_pos_offset_tolerance = 0.1
 
-        # TODO This is now called in every controller, but should be called only once in the controller manager
-        self.robot_helper = DuaticRobotsHelper(self.node)
-        self.pin_helper = DuaticPinocchioHelper(self.node)
-        self.marker_helper = DuaticMarkerHelper(self.node)
+        self.duatic_robots_helper = duatic_robots_helper
 
     def get_low_level_controller(self):
         """ Returns the name of the low-level controller this controller is based on. """
@@ -53,7 +48,7 @@ class BaseController:
 
     def get_joint_states(self):
         """Always return a list of joint state dicts, one per arm."""
-        joint_states = self.robot_helper.get_joint_states()
+        joint_states = self.duatic_robots_helper.get_joint_states()
 
         if self.arms_count <= 1:
             return [joint_states]  # Always a list, even for single arm

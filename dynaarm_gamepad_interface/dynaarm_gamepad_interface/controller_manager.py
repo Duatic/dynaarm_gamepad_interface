@@ -27,6 +27,7 @@
 from controller_manager_msgs.srv import ListControllers, SwitchController
 
 from dynaarm_extensions.duatic_helpers.duatic_controller_helper import DuaticControllerHelper
+from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
 from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import JointTrajectoryController
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
@@ -35,7 +36,7 @@ from dynaarm_gamepad_interface.controllers.freedrive_controller import Freedrive
 class ControllerManager:
     """Handle controllers"""
 
-    def __init__(self, node):
+    def __init__(self, node, duatic_robots_helper: DuaticRobotsHelper):
         self.node = node
 
         self.controller_client = self.node.create_client(
@@ -50,13 +51,13 @@ class ControllerManager:
         self.is_freeze_active = True  # Assume freeze is active until proven otherwise
         self.emergency_button_was_pressed = False        
 
-        self.all_high_level_controllers = {
-            0: FreedriveController(self.node),
-            1: JointTrajectoryController(self.node),
-            2: CartesianController(self.node),
-        }
-
         self.duatic_controller_helper = DuaticControllerHelper(self.node)
+
+        self.all_high_level_controllers = {
+            0: FreedriveController(self.node, duatic_robots_helper),
+            1: JointTrajectoryController(self.node, duatic_robots_helper),
+            2: CartesianController(self.node, duatic_robots_helper),
+        }
         
         self.node.create_timer(0.2, self.check_active_low_level_controllers)
 
@@ -137,7 +138,7 @@ class ControllerManager:
 
         # Only switch low-level controller if it is different
         if next_low_level_controller == self.duatic_controller_helper.active_low_level_controller:
-            self.node.get_logger().info(
+            self.node.get_logger().debug(
                 f"Already using controller: {next_low_level_controller}"
             )
             return

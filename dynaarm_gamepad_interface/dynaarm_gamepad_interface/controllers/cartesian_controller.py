@@ -27,12 +27,15 @@ from geometry_msgs.msg import PoseStamped
 from tf_transformations import quaternion_from_euler, quaternion_multiply
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 
+from dynaarm_extensions.duatic_helpers.duatic_marker_helper import DuaticMarkerHelper
+from dynaarm_extensions.duatic_helpers.duatic_pinocchio_helper import DuaticPinocchioHelper
+
 
 class CartesianController(BaseController):
     """Handles Cartesian control mode and publishes a visualization marker."""
 
-    def __init__(self, node):
-        super().__init__(node)
+    def __init__(self, node, duatic_robots_helper):
+        super().__init__(node, duatic_robots_helper)
 
         self.base_frame = "base"
         self.ee_frame = "flange"
@@ -46,10 +49,13 @@ class CartesianController(BaseController):
             PoseStamped, "/duatic_pose_controller/target_frame", 10
         )
 
+        self.pin_helper = DuaticPinocchioHelper(self.node)
+        self.marker_helper = DuaticMarkerHelper(self.node)
+
     def reset(self):
         """Resets the current_pose to the current one"""
 
-        current_joint_values = self.robot_helper.get_joint_states()            
+        current_joint_values = self.duatic_robots_helper.get_joint_states()            
         self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
 
     def process_input(self, msg):
@@ -57,7 +63,7 @@ class CartesianController(BaseController):
         super().process_input(msg)
 
         if self.current_pose is None:
-            current_joint_values = self.robot_helper.get_joint_states()            
+            current_joint_values = self.duatic_robots_helper.get_joint_states()            
             self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
 
         # --- Translation ---

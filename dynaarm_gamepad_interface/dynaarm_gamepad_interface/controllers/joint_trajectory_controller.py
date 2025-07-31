@@ -33,15 +33,15 @@ class JointTrajectoryController(BaseController):
 
     MIRRORED_BASES = {"shoulder_rotation", "forearm_rotation", "wrist_rotation"}
 
-    def __init__(self, node):
-        super().__init__(node)
+    def __init__(self, node, duatic_robots_helper):
+        super().__init__(node, duatic_robots_helper)
 
         self.controller_base_name = "joint_trajectory_controller"
 
-        self.arms_count = self.robot_helper.get_robot_count()
+        self.arms_count = self.duatic_robots_helper.get_robot_count()
         while self.arms_count <= 0:
             rclpy.spin_once(self.node, timeout_sec=1.0)
-            self.arms_count = self.robot_helper.get_robot_count()
+            self.arms_count = self.duatic_robots_helper.get_robot_count()
 
         duatic_jtc_helper = DuaticJTCHelper(self.node, self.arms_count)
         found_topics = duatic_jtc_helper.get_joint_trajectory_topics()

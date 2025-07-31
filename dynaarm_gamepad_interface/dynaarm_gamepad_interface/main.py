@@ -77,7 +77,7 @@ class GamepadInterface(Node):
         self.get_logger().info(f"Loaded gamepad config: {self.button_mapping}, {self.axis_mapping}")
     
         self.duatic_robots_helper = DuaticRobotsHelper(self)
-        self.controller_manager = ControllerManager(self)
+        self.controller_manager = ControllerManager(self, self.duatic_robots_helper)
         self.gamepad_feedback = GamepadFeedback(self)
         
         # Set the timing based on simulation or real hardware
