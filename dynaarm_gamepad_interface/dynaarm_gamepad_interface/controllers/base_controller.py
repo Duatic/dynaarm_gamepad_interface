@@ -23,20 +23,21 @@
 
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
 
+
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
 
     def __init__(self, node, duatic_robots_helper: DuaticRobotsHelper):
         self.node = node
         self.log_printed = False  # Track whether the log was printed
-        self.arms_count = 0  # Count of arms, used for logging            
+        self.arms_count = 0  # Count of arms, used for logging
         self.needed_low_level_controllers = None
         self.joint_pos_offset_tolerance = 0.1
 
         self.duatic_robots_helper = duatic_robots_helper
 
     def get_low_level_controllers(self):
-        """ Returns the name of the low-level controller this controller is based on. """
+        """Returns the name of the low-level controller this controller is based on."""
         return self.needed_low_level_controllers
 
     def get_joint_value_from_states(self, joint_name):

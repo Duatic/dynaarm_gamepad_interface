@@ -24,20 +24,17 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import os
-import sys
 import threading
 import yaml
 import argparse
-import time
 from ament_index_python.packages import get_package_share_directory
 import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import Bool
 from sensor_msgs.msg import Joy
-from controller_manager_msgs.srv import ListControllers
 
-from dynaarm_gamepad_interface.controller_manager import ControllerManager, SwitchController
+from dynaarm_gamepad_interface.controller_manager import ControllerManager
 from dynaarm_gamepad_interface.utils.gamepad_feedback import GamepadFeedback
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
 
@@ -60,7 +57,7 @@ class GamepadInterface(Node):
         self.move_sleep_pub = self.create_publisher(Bool, "/move_sleep", 10)
 
         # Subscribers
-        self.create_subscription(Joy, "/joy", self.joy_callback, 10)        
+        self.create_subscription(Joy, "/joy", self.joy_callback, 10)
 
         # Load gamepad mappings from YAML
         config_path = os.path.join(
@@ -75,17 +72,16 @@ class GamepadInterface(Node):
         self.button_mapping = config["button_mapping"]
         self.axis_mapping = config["axis_mapping"]
         self.get_logger().info(f"Loaded gamepad config: {self.button_mapping}, {self.axis_mapping}")
-    
+
         self.duatic_robots_helper = DuaticRobotsHelper(self)
         self.controller_manager = ControllerManager(self, self.duatic_robots_helper)
         self.gamepad_feedback = GamepadFeedback(self)
-        
+
         # Set the timing based on simulation or real hardware
-        self.set_dt()          
+        self.set_dt()
 
         self.create_timer(self.dt, self.process_joy_input)
         self.get_logger().info("Gamepad Interface Initialized.")
-
 
     def initialize(self):
         self.controller_manager.wait_for_controller_loaded("joint_trajectory_controller")
@@ -172,13 +168,14 @@ class GamepadInterface(Node):
 
         # Now get the current active controller from the controller manager:
         current_controller = self.controller_manager.get_current_controller()
-        
+
         if current_controller is not None:
             if self.controller_manager.is_freeze_active:
                 # If freeze is active, we don't process any input
                 current_controller.reset()
-            else:                
+            else:
                 current_controller.process_input(msg)
+
 
 def main(args=None):
 

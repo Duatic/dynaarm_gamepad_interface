@@ -36,7 +36,7 @@ class JointTrajectoryController(BaseController):
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
 
-        self.needed_low_level_controllers = ["joint_trajectory_controller"]        
+        self.needed_low_level_controllers = ["joint_trajectory_controller"]
 
         self.arms_count = self.duatic_robots_helper.get_robot_count()
         while self.arms_count <= 0:
@@ -108,7 +108,7 @@ class JointTrajectoryController(BaseController):
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
         super().process_input(msg)  # For any base logging logic
-        
+
         any_axis_active = False
         deadzone = 0.1
 
@@ -192,19 +192,15 @@ class JointTrajectoryController(BaseController):
                 if self.mirror and joint_name in self.mirrored_joints:
                     axis_val = -axis_val
 
-                if abs(axis_val) > effective_deadzone:                    
+                if abs(axis_val) > effective_deadzone:
                     current_position = self.get_joint_value_from_states(joint_name)
                     commanded_positions[i] += axis_val * self.node.dt
                     offset = commanded_positions[i] - current_position
                     if offset > self.joint_pos_offset_tolerance:
-                        commanded_positions[i] = (
-                            current_position + self.joint_pos_offset_tolerance
-                        )
+                        commanded_positions[i] = current_position + self.joint_pos_offset_tolerance
                         self.node.gamepad_feedback.send_feedback(intensity=1.0)
                     elif offset < -self.joint_pos_offset_tolerance:
-                        commanded_positions[i] = (
-                            current_position - self.joint_pos_offset_tolerance
-                        )
+                        commanded_positions[i] = current_position - self.joint_pos_offset_tolerance
                         self.node.gamepad_feedback.send_feedback(intensity=1.0)
                     any_axis_active = True
 
@@ -234,7 +230,7 @@ class JointTrajectoryController(BaseController):
         self, target_positions, publisher, joint_names, speed_percentage=1.0
     ):
         """Publishes a joint trajectory message for the given positions using the provided publisher."""
-        
+
         if not joint_names:
             self.node.get_logger().error("No joint names available. Cannot publish trajectory.")
             return

@@ -42,7 +42,10 @@ class CartesianController(BaseController):
         self.current_pose = None
         self.scale = 0.005
 
-        self.needed_low_level_controllers = ["joint_trajectory_controller", "dynaarm_pose_controller"]        
+        self.needed_low_level_controllers = [
+            "joint_trajectory_controller",
+            "dynaarm_pose_controller",
+        ]
 
         # Publisher for Cartesian pose commands
         self.cartesian_publisher = self.node.create_publisher(
@@ -55,7 +58,7 @@ class CartesianController(BaseController):
     def reset(self):
         """Resets the current_pose to the current one"""
 
-        current_joint_values = self.duatic_robots_helper.get_joint_states()            
+        current_joint_values = self.duatic_robots_helper.get_joint_states()
         self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
         self.marker_helper.clear_markers()
 
@@ -64,7 +67,7 @@ class CartesianController(BaseController):
         super().process_input(msg)
 
         if self.current_pose is None:
-            current_joint_values = self.duatic_robots_helper.get_joint_states()            
+            current_joint_values = self.duatic_robots_helper.get_joint_states()
             self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
 
         # --- Translation ---
@@ -73,11 +76,11 @@ class CartesianController(BaseController):
         z = msg.axes[3]
 
         # --- Rotation ---
-        roll = msg.axes[2]                
-        pitch = float(msg.buttons[7]) - float(msg.buttons[8])        
+        roll = msg.axes[2]
+        pitch = float(msg.buttons[7]) - float(msg.buttons[8])
         yaw = float(msg.axes[4] > 0.5) - float(msg.axes[5] > 0.5)
 
-        # --- Prioritization ---        
+        # --- Prioritization ---
         # Either x or y can be active, but not both and if pitch is pressed the axis are ignored
         if abs(pitch) > 1e-4:
             lx, ly = 0.0, 0.0
@@ -92,12 +95,12 @@ class CartesianController(BaseController):
         if abs(pitch) > 1e-4:
             lz, d_roll = 0.0, 0.0
         elif abs(z) > abs(roll) and abs(z) > 1e-4:
-            lz, d_roll = z, 0.0            
+            lz, d_roll = z, 0.0
         elif abs(roll) > 1e-4:
             lz, d_roll = 0.0, roll
         else:
             lz, d_roll = 0.0, 0.0
-        
+
         # Scaling
         linear_speed = 0.2
         angular_speed = 0.3
