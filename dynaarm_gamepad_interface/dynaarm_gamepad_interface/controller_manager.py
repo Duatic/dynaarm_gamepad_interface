@@ -24,8 +24,6 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 
-from controller_manager_msgs.srv import ListControllers, SwitchController
-
 from dynaarm_extensions.duatic_helpers.duatic_controller_helper import DuaticControllerHelper
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
 from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
@@ -41,13 +39,6 @@ class ControllerManager:
     def __init__(self, node, duatic_robots_helper: DuaticRobotsHelper):
         self.node = node
 
-        self.controller_client = self.node.create_client(
-            ListControllers, "/controller_manager/list_controllers"
-        )
-        self.switch_controller_client = self.node.create_client(
-            SwitchController, "/controller_manager/switch_controller"
-        )
-
         self.active_high_level_controller_index = -1
         self.active_low_level_controllers = []
         self.is_freeze_active = True  # Assume freeze is active until proven otherwise
@@ -58,7 +49,7 @@ class ControllerManager:
         self.all_high_level_controllers = {
             0: FreedriveController(self.node, duatic_robots_helper),
             1: JointTrajectoryController(self.node, duatic_robots_helper),
-            2: CartesianController(self.node, duatic_robots_helper),
+            #2: CartesianController(self.node, duatic_robots_helper),
         }
 
         self.node.create_timer(0.2, self.check_active_low_level_controllers)
@@ -151,8 +142,10 @@ class ControllerManager:
             f"Switching to high-level controller index: {next_high_level_controller_index} ({next_high_level_controller.__class__.__name__})"
         )
 
+        matching_controllers = self.duatic_controller_helper.get_all_controllers(next_low_level_controllers)
+                
         controllers_to_activate = []
-        for controller in next_low_level_controllers:
+        for controller in matching_controllers:
             # Only switch low-level controller if it is different
             if controller in active_low_level_controllers:
                 self.node.get_logger().debug(f"Already using controller: {controller}")
@@ -162,7 +155,7 @@ class ControllerManager:
 
         controllers_to_deactivate = []
         for controller in active_low_level_controllers:
-            if controller not in next_low_level_controllers:
+            if controller not in matching_controllers:
                 controllers_to_deactivate.append(controller)
                 self.node.get_logger().debug(f"Will deactivate controller: {controller}")
 
