@@ -38,10 +38,7 @@ class JointTrajectoryController(BaseController):
 
         self.needed_low_level_controllers = ["joint_trajectory_controller"]
 
-        self.arms_count = self.duatic_robots_helper.get_robot_count()
-        while self.arms_count <= 0:
-            rclpy.spin_once(self.node, timeout_sec=1.0)
-            self.arms_count = self.duatic_robots_helper.get_robot_count()
+        self.arms_count = self.duatic_robots_helper.get_robot_count()        
 
         duatic_jtc_helper = DuaticJTCHelper(self.node, self.arms_count)
         found_topics = duatic_jtc_helper.get_joint_trajectory_topics()
@@ -64,7 +61,7 @@ class JointTrajectoryController(BaseController):
         self.is_joystick_idle = True
 
         # Dominant axis tracking for smoother joystick control
-        self.dominant_axis_threshold = 0.4  # Higher threshold for non-dominant axis
+        self.dominant_axis_threshold = 0.6  # Higher threshold for non-dominant axis
         self.active_axes = {
             "left_joystick": {"x": False, "y": False},
             "right_joystick": {"x": False, "y": False},

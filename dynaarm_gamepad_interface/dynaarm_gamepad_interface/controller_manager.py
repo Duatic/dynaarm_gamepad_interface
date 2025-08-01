@@ -26,9 +26,7 @@
 
 from dynaarm_extensions.duatic_helpers.duatic_controller_helper import DuaticControllerHelper
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
-from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
-    JointTrajectoryController,
-)
+from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import JointTrajectoryController
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
 
@@ -49,7 +47,7 @@ class ControllerManager:
         self.all_high_level_controllers = {
             0: FreedriveController(self.node, duatic_robots_helper),
             1: JointTrajectoryController(self.node, duatic_robots_helper),
-            #2: CartesianController(self.node, duatic_robots_helper),
+            2: CartesianController(self.node, duatic_robots_helper),
         }
 
         self.node.create_timer(0.2, self.check_active_low_level_controllers)
@@ -141,8 +139,8 @@ class ControllerManager:
         self.node.get_logger().info(
             f"Switching to high-level controller index: {next_high_level_controller_index} ({next_high_level_controller.__class__.__name__})"
         )
-
-        matching_controllers = self.duatic_controller_helper.get_all_controllers(next_low_level_controllers)
+        
+        matching_controllers = self.duatic_controller_helper.get_all_controllers(next_low_level_controllers)        
                 
         controllers_to_activate = []
         for controller in matching_controllers:
