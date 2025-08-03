@@ -22,6 +22,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
+from dynaarm_extensions.duatic_helpers.duatic_jtc_helper import DuaticJTCHelper
 
 
 class BaseController:
@@ -29,12 +30,13 @@ class BaseController:
 
     def __init__(self, node, duatic_robots_helper: DuaticRobotsHelper):
         self.node = node
-        self.log_printed = False  # Track whether the log was printed
-        self.arms_count = 0  # Count of arms, used for logging
+        self.log_printed = False  # Track whether the log was printed        
         self.needed_low_level_controllers = None
         self.joint_pos_offset_tolerance = 0.1
 
         self.duatic_robots_helper = duatic_robots_helper
+        self.arms_count = self.duatic_robots_helper.get_robot_count()
+        self.duatic_jtc_helper = DuaticJTCHelper(self.node, self.arms_count)
 
     def get_low_level_controllers(self):
         """Returns the name of the low-level controller this controller is based on."""

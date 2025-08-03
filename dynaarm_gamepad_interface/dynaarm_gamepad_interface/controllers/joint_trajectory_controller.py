@@ -21,9 +21,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import rclpy
-
-from dynaarm_extensions.duatic_helpers.duatic_jtc_helper import DuaticJTCHelper
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -40,11 +37,12 @@ class JointTrajectoryController(BaseController):
 
         self.arms_count = self.duatic_robots_helper.get_robot_count()        
 
-        duatic_jtc_helper = DuaticJTCHelper(self.node, self.arms_count)
-        found_topics = duatic_jtc_helper.get_joint_trajectory_topics()
-        response = duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
+        found_topics = self.duatic_jtc_helper.find_topics_for_controller("joint_trajectory_controller", "joint_trajectory")
+        response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
-        self.topic_to_commanded_positions = response[1]
+        self.topic_to_commanded_positions = response[1]        
+        for topic, joint_names in self.topic_to_joint_names.items():
+            self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)        
 
         # Create publishers for each joint trajectory topic
         self.joint_trajectory_publishers = {}
@@ -53,7 +51,7 @@ class JointTrajectoryController(BaseController):
             self.joint_trajectory_publishers[topic] = self.node.create_publisher(
                 JointTrajectory, topic, 10
             )
-            self.node.get_logger().info(f"Created publisher for topic: {topic}")
+            self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
         self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
 
@@ -83,6 +81,8 @@ class JointTrajectoryController(BaseController):
                 self.mirrored_joints.append(found_sorted[1])
         if self.mirrored_joints:
             self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")
+
+        self.node.get_logger().info("Joint Trajectory Controller initialized.")
 
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""

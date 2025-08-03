@@ -47,28 +47,76 @@ class CartesianController(BaseController):
             "dynaarm_pose_controller",
         ]
 
-        # Publisher for Cartesian pose commands
-        self.cartesian_publisher = self.node.create_publisher(
-            PoseStamped, "/duatic_pose_controller/target_frame", 10
-        )
+        found_topics = self.duatic_jtc_helper.find_topics_for_controller("dynaarm_pose_controller", "target_frame")        
+        response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)                
+        self.topic_to_joint_names = response[0]
+        self.topic_to_commanded_poses = response[1]
+        for topic, _ in self.topic_to_joint_names.items():
+            self.topic_to_commanded_poses[topic] = PoseStamped()
+
+        # Create publishers for each pose controller topic
+        self.cartesian_publishers = {}
+        for topic in self.topic_to_commanded_poses.keys():            
+            self.cartesian_publishers[topic] = self.node.create_publisher(PoseStamped, topic, 10)
+            self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
         self.pin_helper = DuaticPinocchioHelper(self.node)
         self.marker_helper = DuaticMarkerHelper(self.node)
 
+        self.node.get_logger().info("Cartesian controller initialized.")
+
+    def _get_arm_from_topic(self, topic):
+        """Extract arm name from topic like '/dynaarm_pose_controller_arm_left/target_frame'"""
+        if 'arm_left' in topic:
+            return 'arm_left'
+        elif 'arm_right' in topic:
+            return 'arm_right'
+        return ""
+
+    def _get_frame_for_arm(self, arm_name):
+        """Get frame name for specific arm"""
+        if arm_name:
+            return f"{arm_name}/{self.ee_frame}"
+                
+        return f"{self.ee_frame}"
+
     def reset(self):
         """Resets the current_pose to the current one"""
 
+        self.marker_helper.clear_markers()       
         current_joint_values = self.duatic_robots_helper.get_joint_states()
-        self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
-        self.marker_helper.clear_markers()
+        
+        for topic in self.topic_to_commanded_poses.keys():
+            arm_name = self._get_arm_from_topic(topic)            
+            if arm_name:
+                try:                    
+                    frame_name = self._get_frame_for_arm(arm_name)                    
+                    self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)                    
+                except Exception as e:
+                    self.node.get_logger().error(f"Error resetting {arm_name}: {e}")
 
     def process_input(self, msg):
         """Processes joystick input and updates Cartesian position."""
         super().process_input(msg)
 
-        if self.current_pose is None:
+        # Get the first topic for testing
+        first_topic = list(self.topic_to_commanded_poses.keys())[0]
+        
+        # Initialize pose if not already done
+        if self.topic_to_commanded_poses[first_topic].header.frame_id == "":
             current_joint_values = self.duatic_robots_helper.get_joint_states()
-            self.current_pose = self.pin_helper.get_fk_as_pose_stamped(current_joint_values)
+            arm_name = self._get_arm_from_topic(first_topic)
+            
+            if arm_name:
+                try:
+                    frame_name = self._get_frame_for_arm(arm_name)
+                    self.topic_to_commanded_poses[first_topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)
+                except Exception as e:
+                    self.node.get_logger().error(f"Error initializing pose for {arm_name}: {e}")
+                    return
+
+        # Get current pose for the first topic
+        current_pose = self.topic_to_commanded_poses[first_topic]
 
         # --- Translation ---
         x = msg.axes[0]
@@ -106,9 +154,9 @@ class CartesianController(BaseController):
         angular_speed = 0.3
 
         # Update Position
-        self.current_pose.pose.position.x += lx * linear_speed * self.scale
-        self.current_pose.pose.position.y += ly * linear_speed * self.scale
-        self.current_pose.pose.position.z += lz * linear_speed * self.scale
+        current_pose.pose.position.x += lx * linear_speed * self.scale
+        current_pose.pose.position.y += ly * linear_speed * self.scale
+        current_pose.pose.position.z += lz * linear_speed * self.scale
 
         # Update Orientation (Apply Incremental Rotations)
         d_roll *= angular_speed * self.scale
@@ -119,7 +167,7 @@ class CartesianController(BaseController):
         q_pitch = quaternion_from_euler(0, pitch, 0)
         q_yaw = quaternion_from_euler(0, 0, yaw)
 
-        current_q = self.current_pose.pose.orientation
+        current_q = current_pose.pose.orientation
         q_current = [current_q.x, current_q.y, current_q.z, current_q.w]
         q_new = quaternion_multiply(q_current, q_roll)
         q_new = quaternion_multiply(q_new, q_pitch)
@@ -127,13 +175,18 @@ class CartesianController(BaseController):
         norm = (q_new[0] ** 2 + q_new[1] ** 2 + q_new[2] ** 2 + q_new[3] ** 2) ** 0.5
         q_new = [q / norm for q in q_new]
 
-        self.current_pose.pose.orientation.x = q_new[0]
-        self.current_pose.pose.orientation.y = q_new[1]
-        self.current_pose.pose.orientation.z = q_new[2]
-        self.current_pose.pose.orientation.w = q_new[3]
+        current_pose.pose.orientation.x = q_new[0]
+        current_pose.pose.orientation.y = q_new[1]
+        current_pose.pose.orientation.z = q_new[2]
+        current_pose.pose.orientation.w = q_new[3]
 
-        self.current_pose.header.frame_id = self.base_frame
-        self.current_pose.header.stamp = self.node.get_clock().now().to_msg()
+        current_pose.header.frame_id = self.base_frame
+        current_pose.header.stamp = self.node.get_clock().now().to_msg()
 
-        self.marker_helper.create_pose_markers(self.current_pose, self.base_frame)
-        self.cartesian_publisher.publish(self.current_pose)
+        # Get the corresponding publisher for the first topic
+        first_publisher = self.cartesian_publishers[first_topic]
+        
+        # Create markers and publish
+        arm_name = self._get_arm_from_topic(first_topic)
+        self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name)
+        first_publisher.publish(current_pose)
