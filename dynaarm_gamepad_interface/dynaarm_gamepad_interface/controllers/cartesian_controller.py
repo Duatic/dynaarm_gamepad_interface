@@ -37,7 +37,7 @@ class CartesianController(BaseController):
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
 
-        self.base_frame = "base"
+        self.base_frame = "world"
         self.ee_frame = "flange"
         self.current_pose = None
         self.scale = 0.002
@@ -60,7 +60,10 @@ class CartesianController(BaseController):
             self.cartesian_publishers[topic] = self.node.create_publisher(PoseStamped, topic, 10)
             self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
-        self.pin_helper = DuaticPinocchioHelper(self.node)
+        if self.arms_count >= 2:
+            self.pin_helper = DuaticPinocchioHelper(self.node, robot_type="Alpha")
+        else:
+            self.pin_helper = DuaticPinocchioHelper(self.node)
         self.marker_helper = DuaticMarkerHelper(self.node)
 
         self.node.get_logger().info("Cartesian controller initialized.")
@@ -72,13 +75,14 @@ class CartesianController(BaseController):
         elif 'arm_right' in topic:
             return 'arm_right'
         return ""
-
-    def _get_frame_for_arm(self, arm_name):
+    
+    def _get_name_for_arm(self, arm_name, frame_name):
         """Get frame name for specific arm"""
         if arm_name:
-            return f"{arm_name}/{self.ee_frame}"
+            frame_with_arm = f"{arm_name}/{frame_name}"            
+            return frame_with_arm
                 
-        return f"{self.ee_frame}"
+        return f"{frame_name}"
 
     def reset(self):
         """Resets the current_pose to the current one"""
@@ -90,7 +94,7 @@ class CartesianController(BaseController):
             arm_name = self._get_arm_from_topic(topic)            
             if arm_name:
                 try:                    
-                    frame_name = self._get_frame_for_arm(arm_name)                    
+                    frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
                     self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)                    
                 except Exception as e:
                     self.node.get_logger().error(f"Error resetting {arm_name}: {e}")
@@ -109,14 +113,21 @@ class CartesianController(BaseController):
             
             if arm_name:
                 try:
-                    frame_name = self._get_frame_for_arm(arm_name)
+                    frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
                     self.topic_to_commanded_poses[first_topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)
+                    
+                    # Debug the initial pose
+                    pose = self.topic_to_commanded_poses[first_topic]                    
                 except Exception as e:
                     self.node.get_logger().error(f"Error initializing pose for {arm_name}: {e}")
                     return
 
         # Get current pose for the first topic
         current_pose = self.topic_to_commanded_poses[first_topic]
+
+        
+        # Add these debug logs
+        arm_name = self._get_arm_from_topic(first_topic)        
 
         # --- Translation ---
         x = msg.axes[0]
@@ -180,13 +191,14 @@ class CartesianController(BaseController):
         current_pose.pose.orientation.z = q_new[2]
         current_pose.pose.orientation.w = q_new[3]
 
+        arm_name = self._get_arm_from_topic(first_topic)
+        base_frame_name = self._get_name_for_arm(arm_name, self.base_frame)
+
         current_pose.header.frame_id = self.base_frame
         current_pose.header.stamp = self.node.get_clock().now().to_msg()
 
         # Get the corresponding publisher for the first topic
         first_publisher = self.cartesian_publishers[first_topic]
         
-        # Create markers and publish
-        arm_name = self._get_arm_from_topic(first_topic)
-        self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name)
+        self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name + "_")
         first_publisher.publish(current_pose)
