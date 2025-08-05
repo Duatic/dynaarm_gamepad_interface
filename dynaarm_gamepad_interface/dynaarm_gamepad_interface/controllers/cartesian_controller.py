@@ -48,6 +48,8 @@ class CartesianController(BaseController):
             "dynaarm_pose_controller",
         ]
 
+        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
+
         found_topics = self.duatic_jtc_helper.find_topics_for_controller("dynaarm_pose_controller", "target_frame")        
         response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)                
         self.topic_to_joint_names = response[0]
@@ -97,31 +99,23 @@ class CartesianController(BaseController):
             self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)
 
     def process_input(self, msg):
-        """Processes joystick input and updates Cartesian position."""
+        """Processes joystick input and updates Cartesian position for all arms."""
         super().process_input(msg)
 
-        # Get the first topic for testing
+        # Initialize poses if not already done
         first_topic = list(self.topic_to_commanded_poses.keys())[0]
-        
-        # Initialize pose if not already done        
         if self.topic_to_commanded_poses[first_topic].header.frame_id == "":            
             self.reset()
 
-        # Get current pose for the first topic
-        current_pose = self.topic_to_commanded_poses[first_topic]
-        
-        # --- Translation ---
+        # Get input values
         x = msg.axes[0]
         y = msg.axes[1]
         z = msg.axes[3]
-
-        # --- Rotation ---
         roll = msg.axes[2]
         pitch = float(msg.buttons[7]) - float(msg.buttons[8])
         yaw = float(msg.axes[4] > 0.5) - float(msg.axes[5] > 0.5)
 
-        # --- Prioritization ---
-        # Either x or y can be active, but not both and if pitch is pressed the axis are ignored
+        # Prioritization logic
         if abs(pitch) > 1e-4:
             lx, ly = 0.0, 0.0
         elif abs(x) > abs(y) and abs(x) > 1e-4:
@@ -131,7 +125,6 @@ class CartesianController(BaseController):
         else:
             lx, ly = 0.0, 0.0
 
-        # Or either z or roll can be active, but not both
         if abs(pitch) > 1e-4:
             lz, d_roll = 0.0, 0.0
         elif abs(z) > abs(roll) and abs(z) > 1e-4:
@@ -145,40 +138,64 @@ class CartesianController(BaseController):
         linear_speed = 0.2
         angular_speed = 0.3
 
-        # Update Position
-        current_pose.pose.position.x += lx * linear_speed * self.scale
-        current_pose.pose.position.y += ly * linear_speed * self.scale
-        current_pose.pose.position.z += lz * linear_speed * self.scale
+        # Process each arm/topic
+        for topic, current_pose in self.topic_to_commanded_poses.items():
+            arm_name = self._get_arm_from_topic(topic)
 
-        # Update Orientation (Apply Incremental Rotations)
-        d_roll *= angular_speed * self.scale
-        pitch *= angular_speed * self.scale
-        yaw *= angular_speed * self.scale
+            if not self.mirror and arm_name == 'arm_right':
+                continue
+            
+            # Apply mirroring for right arm if mirror is enabled
+            if self.mirror and arm_name == 'arm_right':
+                # Mirror the Y-axis movement and yaw rotation for the right arm
+                mirror_lx = lx
+                mirror_ly = -ly  # Mirror Y movement
+                mirror_lz = lz
+                mirror_d_roll = d_roll
+                mirror_pitch = pitch
+                mirror_yaw = -yaw  # Mirror yaw rotation
+            else:
+                # Use original values for left arm or when mirroring is disabled
+                mirror_lx = lx
+                mirror_ly = ly
+                mirror_lz = lz
+                mirror_d_roll = d_roll
+                mirror_pitch = pitch
+                mirror_yaw = yaw
 
-        q_roll = quaternion_from_euler(d_roll, 0, 0)
-        q_pitch = quaternion_from_euler(0, pitch, 0)
-        q_yaw = quaternion_from_euler(0, 0, yaw)
+            # Update Position
+            current_pose.pose.position.x += mirror_lx * linear_speed * self.scale
+            current_pose.pose.position.y += mirror_ly * linear_speed * self.scale
+            current_pose.pose.position.z += mirror_lz * linear_speed * self.scale
 
-        current_q = current_pose.pose.orientation
-        q_current = [current_q.x, current_q.y, current_q.z, current_q.w]
-        q_new = quaternion_multiply(q_current, q_roll)
-        q_new = quaternion_multiply(q_new, q_pitch)
-        q_new = quaternion_multiply(q_new, q_yaw)
-        norm = (q_new[0] ** 2 + q_new[1] ** 2 + q_new[2] ** 2 + q_new[3] ** 2) ** 0.5
-        q_new = [q / norm for q in q_new]
+            # Update Orientation (Apply Incremental Rotations)
+            d_roll_scaled = mirror_d_roll * angular_speed * self.scale
+            pitch_scaled = mirror_pitch * angular_speed * self.scale
+            yaw_scaled = mirror_yaw * angular_speed * self.scale
 
-        current_pose.pose.orientation.x = q_new[0]
-        current_pose.pose.orientation.y = q_new[1]
-        current_pose.pose.orientation.z = q_new[2]
-        current_pose.pose.orientation.w = q_new[3]
+            q_roll = quaternion_from_euler(d_roll_scaled, 0, 0)
+            q_pitch = quaternion_from_euler(0, pitch_scaled, 0)
+            q_yaw = quaternion_from_euler(0, 0, yaw_scaled)
 
-        arm_name = self._get_arm_from_topic(first_topic)
-                
-        current_pose.header.frame_id = self.base_frame
-        current_pose.header.stamp = self.node.get_clock().now().to_msg()
+            current_q = current_pose.pose.orientation
+            q_current = [current_q.x, current_q.y, current_q.z, current_q.w]
+            q_new = quaternion_multiply(q_current, q_roll)
+            q_new = quaternion_multiply(q_new, q_pitch)
+            q_new = quaternion_multiply(q_new, q_yaw)
+            norm = (q_new[0] ** 2 + q_new[1] ** 2 + q_new[2] ** 2 + q_new[3] ** 2) ** 0.5
+            q_new = [q / norm for q in q_new]
 
-        # Get the corresponding publisher for the first topic
-        first_publisher = self.cartesian_publishers[first_topic]
-                
-        self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name + "_")
-        first_publisher.publish(current_pose)
+            current_pose.pose.orientation.x = q_new[0]
+            current_pose.pose.orientation.y = q_new[1]
+            current_pose.pose.orientation.z = q_new[2]
+            current_pose.pose.orientation.w = q_new[3]
+
+            # Update header
+            current_pose.header.frame_id = self.base_frame
+            current_pose.header.stamp = self.node.get_clock().now().to_msg()
+
+            # Publish to the corresponding arm
+            self.cartesian_publishers[topic].publish(current_pose)
+            
+            # Create markers for visualization
+            self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name + "_")
