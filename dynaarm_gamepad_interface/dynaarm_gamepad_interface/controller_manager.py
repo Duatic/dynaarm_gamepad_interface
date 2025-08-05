@@ -26,7 +26,9 @@
 
 from dynaarm_extensions.duatic_helpers.duatic_controller_helper import DuaticControllerHelper
 from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
-from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import JointTrajectoryController
+from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
+    JointTrajectoryController,
+)
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
 
@@ -105,24 +107,26 @@ class ControllerManager:
         # Find the best matching controller (one with most required controllers satisfied)
         best_controller_idx = -1
         best_controller_score = 0
-        
+
         for idx, high_level_controller in self.all_high_level_controllers.items():
             if hasattr(high_level_controller, "get_low_level_controllers"):
                 required = set(high_level_controller.get_low_level_controllers())
                 active = set(active_low_level_controllers)
-                
+
                 # Check if all required controllers are "contained" in active controllers
                 required_found = True
                 for req_controller in required:
-                    controller_found = any(req_controller in active_controller for active_controller in active)
+                    controller_found = any(
+                        req_controller in active_controller for active_controller in active
+                    )
                     if not controller_found:
                         required_found = False
                         break
-                
+
                 self.node.get_logger().debug(
                     f"Checking controller {idx}: required={required}, active={active}, all_required_found={required_found}"
                 )
-                
+
                 # If all required controllers are found, check if this is the best match
                 if required_found:
                     score = len(required)  # Score based on number of required controllers
@@ -164,9 +168,11 @@ class ControllerManager:
         self.node.get_logger().info(
             f"Switching to high-level controller index: {next_high_level_controller_index} ({next_high_level_controller.__class__.__name__})"
         )
-        
-        matching_controllers = self.duatic_controller_helper.get_all_controllers(next_low_level_controllers)        
-                
+
+        matching_controllers = self.duatic_controller_helper.get_all_controllers(
+            next_low_level_controllers
+        )
+
         controllers_to_activate = []
         for controller in matching_controllers:
             # Only switch low-level controller if it is different

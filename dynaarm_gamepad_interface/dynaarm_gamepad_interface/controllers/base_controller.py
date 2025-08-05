@@ -30,7 +30,7 @@ class BaseController:
 
     def __init__(self, node, duatic_robots_helper: DuaticRobotsHelper):
         self.node = node
-        self.log_printed = False  # Track whether the log was printed        
+        self.log_printed = False  # Track whether the log was printed
         self.needed_low_level_controllers = None
         self.joint_pos_offset_tolerance = 0.1
 
@@ -80,8 +80,8 @@ class BaseController:
 
     def get_arm_from_topic(self, topic):
         """Extract arm name from topic like '/joint_trajectory_controller_arm_left/joint_trajectory'"""
-        if 'arm_left' in topic:
-            return 'arm_left'
-        elif 'arm_right' in topic:
-            return 'arm_right'
+        if "arm_left" in topic:
+            return "arm_left"
+        elif "arm_right" in topic:
+            return "arm_right"
         return ""

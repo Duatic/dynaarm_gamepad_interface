@@ -32,15 +32,17 @@ class JointTrajectoryController(BaseController):
 
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
-        
+
         self.needed_low_level_controllers = ["joint_trajectory_controller"]
 
-        self.arms_count = self.duatic_robots_helper.get_robot_count()        
+        self.arms_count = self.duatic_robots_helper.get_robot_count()
 
-        found_topics = self.duatic_jtc_helper.find_topics_for_controller("joint_trajectory_controller", "joint_trajectory")
+        found_topics = self.duatic_jtc_helper.find_topics_for_controller(
+            "joint_trajectory_controller", "joint_trajectory"
+        )
         response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
-        self.topic_to_commanded_positions = response[1]        
+        self.topic_to_commanded_positions = response[1]
         for topic, joint_names in self.topic_to_joint_names.items():
             self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)
 
@@ -58,7 +60,6 @@ class JointTrajectoryController(BaseController):
             )
             self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
-
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
 
@@ -68,7 +69,7 @@ class JointTrajectoryController(BaseController):
             "left_joystick": {"x": False, "y": False},
             "right_joystick": {"x": False, "y": False},
         }
-        
+
         if self.mirrored_joints:
             self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")
 
@@ -98,7 +99,7 @@ class JointTrajectoryController(BaseController):
         all_joints = []
         for joint_names in self.topic_to_joint_names.values():
             all_joints.extend(joint_names)
-        
+
         # For each base, find matching joints across all topics
         for base in self.MIRRORED_BASES:
             found = []
@@ -106,12 +107,14 @@ class JointTrajectoryController(BaseController):
                 # Accept both arm_left/shoulder_rotation and arm_left_shoulder_rotation
                 if joint.endswith("/" + base) or joint.endswith("_" + base) or joint == base:
                     found.append(joint)
-            
+
             if len(found) == 2:
                 # Pick one to mirror (e.g. the one with the "higher" prefix)
                 found_sorted = sorted(found)
                 self.mirrored_joints.append(found_sorted[1])  # Mirror the second one (arm_right)
-                self.node.get_logger().debug(f"Mirroring joint {found_sorted[1]} based on {found_sorted[0]}")
+                self.node.get_logger().debug(
+                    f"Mirroring joint {found_sorted[1]} based on {found_sorted[0]}"
+                )
 
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
@@ -148,9 +151,9 @@ class JointTrajectoryController(BaseController):
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
             arm_name = self.get_arm_from_topic(topic)
-            
+
             # If mirror is not active, only control the first arm (left arm)
-            if not self.mirror and arm_name == 'arm_right':
+            if not self.mirror and arm_name == "arm_right":
                 continue
 
             commanded_positions = self.topic_to_commanded_positions[topic]

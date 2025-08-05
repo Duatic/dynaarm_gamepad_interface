@@ -50,16 +50,18 @@ class CartesianController(BaseController):
 
         self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
 
-        found_topics = self.duatic_jtc_helper.find_topics_for_controller("dynaarm_pose_controller", "target_frame")        
-        response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)                
+        found_topics = self.duatic_jtc_helper.find_topics_for_controller(
+            "dynaarm_pose_controller", "target_frame"
+        )
+        response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_poses = response[1]
         for topic, _ in self.topic_to_joint_names.items():
-            self.topic_to_commanded_poses[topic] = PoseStamped()        
+            self.topic_to_commanded_poses[topic] = PoseStamped()
 
         # Create publishers for each pose controller topic
         self.cartesian_publishers = {}
-        for topic in self.topic_to_commanded_poses.keys():            
+        for topic in self.topic_to_commanded_poses.keys():
             self.cartesian_publishers[topic] = self.node.create_publisher(PoseStamped, topic, 10)
             self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
@@ -70,25 +72,27 @@ class CartesianController(BaseController):
         self.marker_helper = DuaticMarkerHelper(self.node)
 
         self.node.get_logger().info("Cartesian controller initialized.")
-    
+
     def _get_name_for_arm(self, arm_name, frame_name):
         """Get frame name for specific arm"""
         if arm_name:
-            frame_with_arm = f"{arm_name}/{frame_name}"            
+            frame_with_arm = f"{arm_name}/{frame_name}"
             return frame_with_arm
-                
+
         return f"{frame_name}"
 
     def reset(self):
         """Resets the current_pose to the current one"""
 
-        self.marker_helper.clear_markers()       
+        self.marker_helper.clear_markers()
         current_joint_values = self.duatic_robots_helper.get_joint_states()
-        
+
         for topic in self.topic_to_commanded_poses.keys():
             arm_name = self.get_arm_from_topic(topic)
             frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
-            self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)
+            self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(
+                current_joint_values, frame_name
+            )
 
     def process_input(self, msg):
         """Processes joystick input and updates Cartesian position for all arms."""
@@ -96,7 +100,7 @@ class CartesianController(BaseController):
 
         # Initialize poses if not already done
         first_topic = list(self.topic_to_commanded_poses.keys())[0]
-        if self.topic_to_commanded_poses[first_topic].header.frame_id == "":            
+        if self.topic_to_commanded_poses[first_topic].header.frame_id == "":
             self.reset()
 
         # Get input values
@@ -134,11 +138,11 @@ class CartesianController(BaseController):
         for topic, current_pose in self.topic_to_commanded_poses.items():
             arm_name = self.get_arm_from_topic(topic)
 
-            if not self.mirror and arm_name == 'arm_right':
+            if not self.mirror and arm_name == "arm_right":
                 continue
-            
+
             # Apply mirroring for right arm if mirror is enabled
-            if self.mirror and arm_name == 'arm_right':
+            if self.mirror and arm_name == "arm_right":
                 # Mirror the Y-axis movement and yaw rotation for the right arm
                 mirror_lx = lx
                 mirror_ly = -ly  # Mirror Y movement
@@ -188,6 +192,6 @@ class CartesianController(BaseController):
 
             # Publish to the corresponding arm
             self.cartesian_publishers[topic].publish(current_pose)
-            
+
             # Create markers for visualization
             self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name + "_")
