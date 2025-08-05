@@ -41,6 +41,7 @@ class CartesianController(BaseController):
         self.ee_frame = "flange"
         self.current_pose = None
         self.scale = 0.002
+        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
 
         self.needed_low_level_controllers = [
             "joint_trajectory_controller",
@@ -52,7 +53,7 @@ class CartesianController(BaseController):
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_poses = response[1]
         for topic, _ in self.topic_to_joint_names.items():
-            self.topic_to_commanded_poses[topic] = PoseStamped()
+            self.topic_to_commanded_poses[topic] = PoseStamped()        
 
         # Create publishers for each pose controller topic
         self.cartesian_publishers = {}
@@ -91,13 +92,9 @@ class CartesianController(BaseController):
         current_joint_values = self.duatic_robots_helper.get_joint_states()
         
         for topic in self.topic_to_commanded_poses.keys():
-            arm_name = self._get_arm_from_topic(topic)            
-            if arm_name:
-                try:                    
-                    frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
-                    self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)                    
-                except Exception as e:
-                    self.node.get_logger().error(f"Error resetting {arm_name}: {e}")
+            arm_name = self._get_arm_from_topic(topic)
+            frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
+            self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)
 
     def process_input(self, msg):
         """Processes joystick input and updates Cartesian position."""
@@ -106,29 +103,13 @@ class CartesianController(BaseController):
         # Get the first topic for testing
         first_topic = list(self.topic_to_commanded_poses.keys())[0]
         
-        # Initialize pose if not already done
-        if self.topic_to_commanded_poses[first_topic].header.frame_id == "":
-            current_joint_values = self.duatic_robots_helper.get_joint_states()
-            arm_name = self._get_arm_from_topic(first_topic)
-            
-            if arm_name:
-                try:
-                    frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
-                    self.topic_to_commanded_poses[first_topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)
-                    
-                    # Debug the initial pose
-                    pose = self.topic_to_commanded_poses[first_topic]                    
-                except Exception as e:
-                    self.node.get_logger().error(f"Error initializing pose for {arm_name}: {e}")
-                    return
+        # Initialize pose if not already done        
+        if self.topic_to_commanded_poses[first_topic].header.frame_id == "":            
+            self.reset()
 
         # Get current pose for the first topic
         current_pose = self.topic_to_commanded_poses[first_topic]
-
         
-        # Add these debug logs
-        arm_name = self._get_arm_from_topic(first_topic)        
-
         # --- Translation ---
         x = msg.axes[0]
         y = msg.axes[1]
@@ -192,13 +173,12 @@ class CartesianController(BaseController):
         current_pose.pose.orientation.w = q_new[3]
 
         arm_name = self._get_arm_from_topic(first_topic)
-        base_frame_name = self._get_name_for_arm(arm_name, self.base_frame)
-
+                
         current_pose.header.frame_id = self.base_frame
         current_pose.header.stamp = self.node.get_clock().now().to_msg()
 
         # Get the corresponding publisher for the first topic
         first_publisher = self.cartesian_publishers[first_topic]
-        
+                
         self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name + "_")
         first_publisher.publish(current_pose)
