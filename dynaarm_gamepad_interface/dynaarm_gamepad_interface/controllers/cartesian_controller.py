@@ -70,14 +70,6 @@ class CartesianController(BaseController):
         self.marker_helper = DuaticMarkerHelper(self.node)
 
         self.node.get_logger().info("Cartesian controller initialized.")
-
-    def _get_arm_from_topic(self, topic):
-        """Extract arm name from topic like '/dynaarm_pose_controller_arm_left/target_frame'"""
-        if 'arm_left' in topic:
-            return 'arm_left'
-        elif 'arm_right' in topic:
-            return 'arm_right'
-        return ""
     
     def _get_name_for_arm(self, arm_name, frame_name):
         """Get frame name for specific arm"""
@@ -94,7 +86,7 @@ class CartesianController(BaseController):
         current_joint_values = self.duatic_robots_helper.get_joint_states()
         
         for topic in self.topic_to_commanded_poses.keys():
-            arm_name = self._get_arm_from_topic(topic)
+            arm_name = self.get_arm_from_topic(topic)
             frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
             self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name)
 
@@ -140,7 +132,7 @@ class CartesianController(BaseController):
 
         # Process each arm/topic
         for topic, current_pose in self.topic_to_commanded_poses.items():
-            arm_name = self._get_arm_from_topic(topic)
+            arm_name = self.get_arm_from_topic(topic)
 
             if not self.mirror and arm_name == 'arm_right':
                 continue

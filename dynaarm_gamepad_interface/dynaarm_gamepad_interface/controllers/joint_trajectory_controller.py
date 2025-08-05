@@ -32,7 +32,7 @@ class JointTrajectoryController(BaseController):
 
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
-
+        
         self.needed_low_level_controllers = ["joint_trajectory_controller"]
 
         self.arms_count = self.duatic_robots_helper.get_robot_count()        
@@ -42,7 +42,12 @@ class JointTrajectoryController(BaseController):
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_positions = response[1]        
         for topic, joint_names in self.topic_to_joint_names.items():
-            self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)        
+            self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)
+
+        # Build mirrored joints: collect all joints across all topics first
+        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
+        self.mirrored_joints = []
+        self._build_mirrored_joints()
 
         # Create publishers for each joint trajectory topic
         self.joint_trajectory_publishers = {}
@@ -53,7 +58,6 @@ class JointTrajectoryController(BaseController):
             )
             self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
-        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
 
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
@@ -64,21 +68,7 @@ class JointTrajectoryController(BaseController):
             "left_joystick": {"x": False, "y": False},
             "right_joystick": {"x": False, "y": False},
         }
-
-        # Build mirrored joints: for each base, find all prefixes that have that joint
-        self.mirrored_joints = []
-        for base in self.MIRRORED_BASES:
-            # Find all joints with this base, grouped by prefix
-            found = []
-            for prefix, joints in self.prefix_to_joints.items():
-                for joint in joints:
-                    # Accept both arm_1/shoulder_rotation and arm_1_shoulder_rotation
-                    if joint.endswith("/" + base) or joint.endswith("_" + base) or joint == base:
-                        found.append(joint)
-            if len(found) == 2:
-                # Pick one to mirror (e.g. the one with the "higher" prefix)
-                found_sorted = sorted(found)
-                self.mirrored_joints.append(found_sorted[1])
+        
         if self.mirrored_joints:
             self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")
 
@@ -101,6 +91,27 @@ class JointTrajectoryController(BaseController):
             self.topic_to_commanded_positions[topic] = [
                 best_dict.get(joint, 0.0) for joint in joint_names
             ]
+
+    def _build_mirrored_joints(self):
+        """Build list of joints that should be mirrored based on MIRRORED_BASES."""
+        # Collect all joints from all topics
+        all_joints = []
+        for joint_names in self.topic_to_joint_names.values():
+            all_joints.extend(joint_names)
+        
+        # For each base, find matching joints across all topics
+        for base in self.MIRRORED_BASES:
+            found = []
+            for joint in all_joints:
+                # Accept both arm_left/shoulder_rotation and arm_left_shoulder_rotation
+                if joint.endswith("/" + base) or joint.endswith("_" + base) or joint == base:
+                    found.append(joint)
+            
+            if len(found) == 2:
+                # Pick one to mirror (e.g. the one with the "higher" prefix)
+                found_sorted = sorted(found)
+                self.mirrored_joints.append(found_sorted[1])  # Mirror the second one (arm_right)
+                self.node.get_logger().debug(f"Mirroring joint {found_sorted[1]} based on {found_sorted[0]}")
 
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
@@ -136,6 +147,12 @@ class JointTrajectoryController(BaseController):
 
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
+            arm_name = self.get_arm_from_topic(topic)
+            
+            # If mirror is not active, only control the first arm (left arm)
+            if not self.mirror and arm_name == 'arm_right':
+                continue
+
             commanded_positions = self.topic_to_commanded_positions[topic]
             for i, joint_name in enumerate(joint_names):
                 axis_val = 0.0

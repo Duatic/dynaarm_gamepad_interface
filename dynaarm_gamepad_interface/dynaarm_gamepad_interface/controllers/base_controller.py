@@ -77,3 +77,11 @@ class BaseController:
     def reset(self):
         """Reset controller state when switching back to this controller."""
         self.log_printed = False  # Reset logging state
+
+    def get_arm_from_topic(self, topic):
+        """Extract arm name from topic like '/joint_trajectory_controller_arm_left/joint_trajectory'"""
+        if 'arm_left' in topic:
+            return 'arm_left'
+        elif 'arm_right' in topic:
+            return 'arm_right'
+        return ""
