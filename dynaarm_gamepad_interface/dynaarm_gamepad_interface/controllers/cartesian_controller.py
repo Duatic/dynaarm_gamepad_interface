@@ -40,14 +40,13 @@ class CartesianController(BaseController):
         self.base_frame = "world"
         self.ee_frame = "flange"
         self.current_pose = None
-        self.scale = 0.002
+        self.scale = 0.05
         self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
 
         self.needed_low_level_controllers = [
             "joint_trajectory_controller",
             "dynaarm_pose_controller",
         ]
-
 
         found_topics = self.duatic_jtc_helper.find_topics_for_controller(
             "dynaarm_pose_controller", "target_frame"
@@ -82,7 +81,6 @@ class CartesianController(BaseController):
 
     def reset(self):
         """Resets the current_pose to the current one"""
-
         self.marker_helper.clear_markers()
         current_joint_values = self.duatic_robots_helper.get_joint_states()
 
@@ -103,12 +101,16 @@ class CartesianController(BaseController):
             self.reset()
 
         # Get input values
-        x = msg.axes[0]
-        y = msg.axes[1]
-        z = msg.axes[3]
-        roll = msg.axes[2]
-        pitch = float(msg.buttons[7]) - float(msg.buttons[8])
-        yaw = float(msg.axes[4] > 0.5) - float(msg.axes[5] > 0.5)
+        x = msg.axes[self.node.axis_mapping["left_joystick"]["y"]]
+        y = -1 * msg.axes[self.node.axis_mapping["left_joystick"]["x"]]
+        z = msg.axes[self.node.axis_mapping["right_joystick"]["y"]]
+        roll = msg.axes[self.node.axis_mapping["right_joystick"]["x"]]
+        pitch = float(msg.buttons[self.node.button_mapping["wrist_rotation_left"]]) - float(
+            msg.buttons[self.node.button_mapping["wrist_rotation_right"]]
+        )
+        yaw = float(msg.axes[self.node.axis_mapping["triggers"]["left"]] > 0.5) - float(
+            msg.axes[self.node.axis_mapping["triggers"]["right"]] > 0.5
+        )
 
         # Prioritization logic
         if abs(pitch) > 1e-4:
