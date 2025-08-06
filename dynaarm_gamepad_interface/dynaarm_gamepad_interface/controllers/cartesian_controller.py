@@ -48,7 +48,6 @@ class CartesianController(BaseController):
             "dynaarm_pose_controller",
         ]
 
-        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
 
         found_topics = self.duatic_jtc_helper.find_topics_for_controller(
             "dynaarm_pose_controller", "target_frame"
