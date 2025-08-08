@@ -64,8 +64,10 @@ class CartesianController(BaseController):
 
         if len(self.arms) >= 2:            
             self.pin_helper = DuaticPinocchioHelper(self.node, robot_type="Alpha")
+            self.base_frame = "tbase"
         else:
             self.pin_helper = DuaticPinocchioHelper(self.node)
+            self.base_frame = "world"
         self.marker_helper = DuaticMarkerHelper(self.node)
 
         self.node.get_logger().info("Cartesian controller initialized.")
@@ -86,9 +88,8 @@ class CartesianController(BaseController):
         for topic in self.topic_to_commanded_poses.keys():
             arm_name = self.get_arm_from_topic(topic)
             frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
-            self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(
-                current_joint_values, frame_name
-            )
+            self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name, self.base_frame)
+            self.topic_to_commanded_poses[topic].header.frame_id = self.base_frame
 
     def process_input(self, msg):
         """Processes joystick input and updates Cartesian position for all arms."""
