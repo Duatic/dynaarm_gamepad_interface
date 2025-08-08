@@ -34,41 +34,12 @@ class BaseController:
         self.needed_low_level_controllers = None
         self.joint_pos_offset_tolerance = 0.1
 
-        self.duatic_robots_helper = duatic_robots_helper
-        self.arms_count = self.duatic_robots_helper.get_robot_count()
-        self.duatic_jtc_helper = DuaticJTCHelper(self.node, self.arms_count)
+        self.duatic_robots_helper = duatic_robots_helper   
+        self.duatic_jtc_helper = DuaticJTCHelper(self.node)
 
     def get_low_level_controllers(self):
         """Returns the name of the low-level controller this controller is based on."""
         return self.needed_low_level_controllers
-
-    def get_joint_value_from_states(self, joint_name):
-        joint_states_list = self.get_joint_states()
-        for d in joint_states_list:
-            if joint_name in d:
-                return d[joint_name]
-        return 0.0  # or None if you prefer
-
-    def get_joint_states(self):
-        """Always return a list of joint state dicts, one per arm."""
-        joint_states = self.duatic_robots_helper.get_joint_states()
-
-        if self.arms_count <= 1:
-            return [joint_states]  # Always a list, even for single arm
-
-        # Multi-arm: split joint_states into self.arms_count chunks
-        joint_names = list(joint_states.keys())
-        values = list(joint_states.values())
-        chunk_size = len(joint_names) // self.arms_count
-        joint_states_per_arm = []
-        for i in range(self.arms_count):
-            start = i * chunk_size
-            end = (i + 1) * chunk_size
-            arm_joint_names = joint_names[start:end]
-            arm_joint_values = values[start:end]
-            arm_joint_dict = dict(zip(arm_joint_names, arm_joint_values))
-            joint_states_per_arm.append(arm_joint_dict)
-        return joint_states_per_arm
 
     def process_input(self, joy_msg):
         """Override this in child classes."""

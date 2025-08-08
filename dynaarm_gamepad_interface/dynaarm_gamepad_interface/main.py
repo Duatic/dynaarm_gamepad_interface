@@ -74,18 +74,17 @@ class GamepadInterface(Node):
         self.get_logger().info(f"Loaded gamepad config: {self.button_mapping}, {self.axis_mapping}")
 
         self.duatic_robots_helper = DuaticRobotsHelper(self)
+        self.duatic_robots_helper.wait_for_robot()
         self.controller_manager = ControllerManager(self, self.duatic_robots_helper)
+        self.controller_manager.wait_for_controller_loaded("joint_trajectory_controller")
+
         self.gamepad_feedback = GamepadFeedback(self)
 
         # Set the timing based on simulation or real hardware
-        self.set_dt()
+        self.dt = self.duatic_robots_helper.get_dt()
 
         self.create_timer(self.dt, self.process_joy_input)
         self.get_logger().info("Gamepad Interface Initialized.")
-
-    def initialize(self):
-        self.controller_manager.wait_for_controller_loaded("joint_trajectory_controller")
-        self.duatic_robots_helper.get_robot_count()
 
     def set_dt(self):
 
@@ -185,7 +184,7 @@ def main(args=None):
 
     rclpy.init(args=args)
     node = GamepadInterface(mirror=parsed_args.mirror)
-    node.initialize()
+    
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
