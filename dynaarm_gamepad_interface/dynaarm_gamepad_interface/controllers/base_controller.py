@@ -34,7 +34,7 @@ class BaseController:
         self.needed_low_level_controllers = None
         self.joint_pos_offset_tolerance = 0.1
 
-        self.duatic_robots_helper = duatic_robots_helper   
+        self.duatic_robots_helper = duatic_robots_helper
         self.duatic_jtc_helper = DuaticJTCHelper(self.node)
 
     def get_low_level_controllers(self):

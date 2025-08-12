@@ -36,7 +36,7 @@ class CartesianController(BaseController):
 
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
-        
+
         self.ee_frame = "flange"
         self.current_pose = None
         self.scale = 0.05
@@ -47,8 +47,10 @@ class CartesianController(BaseController):
             "dynaarm_pose_controller",
         ]
 
-        self.arms = self.duatic_robots_helper.get_component_names("arm")        
-        found_topics = self.duatic_jtc_helper.find_topics_for_controller("dynaarm_pose_controller", "target_frame", self.arms)
+        self.arms = self.duatic_robots_helper.get_component_names("arm")
+        found_topics = self.duatic_jtc_helper.find_topics_for_controller(
+            "dynaarm_pose_controller", "target_frame", self.arms
+        )
         response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_poses = response[1]
@@ -61,13 +63,13 @@ class CartesianController(BaseController):
             self.cartesian_publishers[topic] = self.node.create_publisher(PoseStamped, topic, 10)
             self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
-        if len(self.arms) >= 2:            
+        if len(self.arms) >= 2:
             self.base_frame = "tbase"
-            self.pin_helper = DuaticPinocchioHelper(self.node, robot_type="Alpha")            
-        else:            
+            self.pin_helper = DuaticPinocchioHelper(self.node, robot_type="Alpha")
+        else:
             self.base_frame = "world"
             self.pin_helper = DuaticPinocchioHelper(self.node)
-            
+
         self.marker_helper = DuaticMarkerHelper(self.node)
 
         self.node.get_logger().info("Cartesian controller initialized.")
@@ -88,7 +90,9 @@ class CartesianController(BaseController):
         for topic in self.topic_to_commanded_poses.keys():
             arm_name = self.get_arm_from_topic(topic)
             frame_name = self._get_name_for_arm(arm_name, self.ee_frame)
-            self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(current_joint_values, frame_name, self.base_frame)
+            self.topic_to_commanded_poses[topic] = self.pin_helper.get_fk_as_pose_stamped(
+                current_joint_values, frame_name, self.base_frame
+            )
             self.topic_to_commanded_poses[topic].header.frame_id = self.base_frame
 
     def process_input(self, msg):
@@ -137,8 +141,8 @@ class CartesianController(BaseController):
         angular_speed = 0.3
 
         # Process each arm/topic
-        for topic, current_pose in self.topic_to_commanded_poses.items():          
-  
+        for topic, current_pose in self.topic_to_commanded_poses.items():
+
             arm_name = self.get_arm_from_topic(topic)
 
             if not self.mirror and arm_name == "arm_right":
@@ -196,5 +200,5 @@ class CartesianController(BaseController):
             # Publish to the corresponding arm
             self.cartesian_publishers[topic].publish(current_pose)
 
-            # Create markers for visualization              
+            # Create markers for visualization
             self.marker_helper.create_pose_markers(current_pose, self.base_frame, arm_name + "_")

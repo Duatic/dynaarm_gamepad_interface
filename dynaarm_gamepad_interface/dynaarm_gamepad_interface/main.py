@@ -184,7 +184,7 @@ def main(args=None):
 
     rclpy.init(args=args)
     node = GamepadInterface(mirror=parsed_args.mirror)
-    
+
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

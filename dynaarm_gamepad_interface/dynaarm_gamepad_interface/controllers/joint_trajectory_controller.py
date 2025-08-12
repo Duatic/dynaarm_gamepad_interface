@@ -34,9 +34,11 @@ class JointTrajectoryController(BaseController):
         super().__init__(node, duatic_robots_helper)
 
         self.needed_low_level_controllers = ["joint_trajectory_controller"]
-        
-        self.arms = self.duatic_robots_helper.get_component_names("arm")        
-        found_topics = self.duatic_jtc_helper.find_topics_for_controller("joint_trajectory_controller", "joint_trajectory", self.arms)        
+
+        self.arms = self.duatic_robots_helper.get_component_names("arm")
+        found_topics = self.duatic_jtc_helper.find_topics_for_controller(
+            "joint_trajectory_controller", "joint_trajectory", self.arms
+        )
         response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_positions = response[1]
@@ -75,12 +77,12 @@ class JointTrajectoryController(BaseController):
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""
         joint_states = self.duatic_robots_helper.get_joint_states()  # Returns a dict
-        
+
         for topic, joint_names in self.topic_to_joint_names.items():
             # Reset commanded positions to current joint positions
             self.topic_to_commanded_positions[topic] = [
                 joint_states.get(joint, 0.0) for joint in joint_names
-            ]            
+            ]
 
     def _build_mirrored_joints(self):
         """Build list of joints that should be mirrored based on MIRRORED_BASES."""
@@ -199,7 +201,9 @@ class JointTrajectoryController(BaseController):
                     axis_val = -axis_val
 
                 if abs(axis_val) > effective_deadzone:
-                    current_position = self.duatic_robots_helper.get_joint_value_from_states(joint_name)
+                    current_position = self.duatic_robots_helper.get_joint_value_from_states(
+                        joint_name
+                    )
                     commanded_positions[i] += axis_val * self.node.dt
                     offset = commanded_positions[i] - current_position
                     if offset > self.joint_pos_offset_tolerance:
