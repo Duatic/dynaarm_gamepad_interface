@@ -36,8 +36,7 @@ class CartesianController(BaseController):
 
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
-
-        self.base_frame = "world"
+        
         self.ee_frame = "flange"
         self.current_pose = None
         self.scale = 0.05
@@ -63,11 +62,12 @@ class CartesianController(BaseController):
             self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
         if len(self.arms) >= 2:            
-            self.pin_helper = DuaticPinocchioHelper(self.node, robot_type="Alpha")
             self.base_frame = "tbase"
-        else:
-            self.pin_helper = DuaticPinocchioHelper(self.node)
+            self.pin_helper = DuaticPinocchioHelper(self.node, robot_type="Alpha")            
+        else:            
             self.base_frame = "world"
+            self.pin_helper = DuaticPinocchioHelper(self.node)
+            
         self.marker_helper = DuaticMarkerHelper(self.node)
 
         self.node.get_logger().info("Cartesian controller initialized.")
