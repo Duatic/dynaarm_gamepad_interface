@@ -21,10 +21,6 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import rclpy
-
-from dynaarm_extensions.duatic_helpers.duatic_jtc_helper import DuaticJTCHelper
-from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
 from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -34,20 +30,25 @@ class JointTrajectoryController(BaseController):
 
     MIRRORED_BASES = {"shoulder_rotation", "forearm_rotation", "wrist_rotation"}
 
-    def __init__(self, node):
-        super().__init__(node)
+    def __init__(self, node, duatic_robots_helper):
+        super().__init__(node, duatic_robots_helper)
 
-        self.robot_helper = DuaticRobotsHelper(self.node)
-        self.arms_count = self.robot_helper.get_robot_count()
-        while self.arms_count <= 0:
-            rclpy.spin_once(self.node, timeout_sec=1.0)
-            self.arms_count = self.robot_helper.get_robot_count()
+        self.needed_low_level_controllers = ["joint_trajectory_controller"]
 
-        duatic_jtc_helper = DuaticJTCHelper(self.node, self.arms_count)
-        found_topics = duatic_jtc_helper.get_joint_trajectory_topics()
-        response = duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
+        self.arms = self.duatic_robots_helper.get_component_names("arm")
+        found_topics = self.duatic_jtc_helper.find_topics_for_controller(
+            "joint_trajectory_controller", "joint_trajectory", self.arms
+        )
+        response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_positions = response[1]
+        for topic, joint_names in self.topic_to_joint_names.items():
+            self.topic_to_commanded_positions[topic] = [0.0] * len(joint_names)
+
+        # Build mirrored joints: collect all joints across all topics first
+        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
+        self.mirrored_joints = []
+        self._build_mirrored_joints()
 
         # Create publishers for each joint trajectory topic
         self.joint_trajectory_publishers = {}
@@ -56,58 +57,60 @@ class JointTrajectoryController(BaseController):
             self.joint_trajectory_publishers[topic] = self.node.create_publisher(
                 JointTrajectory, topic, 10
             )
-            self.node.get_logger().info(f"Created publisher for topic: {topic}")
-
-        self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
+            self.node.get_logger().debug(f"Created publisher for topic: {topic}")
 
         self.prefix_to_joints = {}
         self.is_joystick_idle = True
 
         # Dominant axis tracking for smoother joystick control
-        self.dominant_axis_threshold = 0.4  # Higher threshold for non-dominant axis
+        self.dominant_axis_threshold = 0.6  # Higher threshold for non-dominant axis
         self.active_axes = {
             "left_joystick": {"x": False, "y": False},
             "right_joystick": {"x": False, "y": False},
         }
 
-        # Build mirrored joints: for each base, find all prefixes that have that joint
-        self.mirrored_joints = []
-        for base in self.MIRRORED_BASES:
-            # Find all joints with this base, grouped by prefix
-            found = []
-            for prefix, joints in self.prefix_to_joints.items():
-                for joint in joints:
-                    # Accept both arm_1/shoulder_rotation and arm_1_shoulder_rotation
-                    if joint.endswith("/" + base) or joint.endswith("_" + base) or joint == base:
-                        found.append(joint)
-            if len(found) == 2:
-                # Pick one to mirror (e.g. the one with the "higher" prefix)
-                found_sorted = sorted(found)
-                self.mirrored_joints.append(found_sorted[1])
         if self.mirrored_joints:
             self.node.get_logger().info(f"Mirrored joints: {self.mirrored_joints}")
 
+        self.node.get_logger().info("Joint Trajectory Controller initialized.")
+
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""
-        joint_states_list = self.get_joint_states()  # Returns a list of dicts
+        joint_states = self.duatic_robots_helper.get_joint_states()  # Returns a dict
 
         for topic, joint_names in self.topic_to_joint_names.items():
-            # Find the dict with the most matching joint names
-            best_dict = {}
-            max_found = 0
-            for d in joint_states_list:
-                found = sum(1 for joint in joint_names if joint in d)
-                if found > max_found:
-                    max_found = found
-                    best_dict = d
-            # Use best_dict for this topic
+            # Reset commanded positions to current joint positions
             self.topic_to_commanded_positions[topic] = [
-                best_dict.get(joint, 0.0) for joint in joint_names
+                joint_states.get(joint, 0.0) for joint in joint_names
             ]
+
+    def _build_mirrored_joints(self):
+        """Build list of joints that should be mirrored based on MIRRORED_BASES."""
+        # Collect all joints from all topics
+        all_joints = []
+        for joint_names in self.topic_to_joint_names.values():
+            all_joints.extend(joint_names)
+
+        # For each base, find matching joints across all topics
+        for base in self.MIRRORED_BASES:
+            found = []
+            for joint in all_joints:
+                # Accept both arm_left/shoulder_rotation and arm_left_shoulder_rotation
+                if joint.endswith("/" + base) or joint.endswith("_" + base) or joint == base:
+                    found.append(joint)
+
+            if len(found) == 2:
+                # Pick one to mirror (e.g. the one with the "higher" prefix)
+                found_sorted = sorted(found)
+                self.mirrored_joints.append(found_sorted[1])  # Mirror the second one (arm_right)
+                self.node.get_logger().debug(
+                    f"Mirroring joint {found_sorted[1]} based on {found_sorted[0]}"
+                )
 
     def process_input(self, msg):
         """Processes joystick input, integrates over dt, and clamps the commanded positions."""
         super().process_input(msg)  # For any base logging logic
+
         any_axis_active = False
         deadzone = 0.1
 
@@ -138,6 +141,12 @@ class JointTrajectoryController(BaseController):
 
         # Process each topic (arm/controller) independently
         for topic, joint_names in self.topic_to_joint_names.items():
+            arm_name = self.get_arm_from_topic(topic)
+
+            # If mirror is not active, only control the first arm (left arm)
+            if not self.mirror and arm_name == "arm_right":
+                continue
+
             commanded_positions = self.topic_to_commanded_positions[topic]
             for i, joint_name in enumerate(joint_names):
                 axis_val = 0.0
@@ -192,18 +201,16 @@ class JointTrajectoryController(BaseController):
                     axis_val = -axis_val
 
                 if abs(axis_val) > effective_deadzone:
-                    current_position = self.node.joint_states.get(joint_name, 0.0)
+                    current_position = self.duatic_robots_helper.get_joint_value_from_states(
+                        joint_name
+                    )
                     commanded_positions[i] += axis_val * self.node.dt
                     offset = commanded_positions[i] - current_position
-                    if offset > self.node.joint_pos_offset_tolerance:
-                        commanded_positions[i] = (
-                            current_position + self.node.joint_pos_offset_tolerance
-                        )
+                    if offset > self.joint_pos_offset_tolerance:
+                        commanded_positions[i] = current_position + self.joint_pos_offset_tolerance
                         self.node.gamepad_feedback.send_feedback(intensity=1.0)
-                    elif offset < -self.node.joint_pos_offset_tolerance:
-                        commanded_positions[i] = (
-                            current_position - self.node.joint_pos_offset_tolerance
-                        )
+                    elif offset < -self.joint_pos_offset_tolerance:
+                        commanded_positions[i] = current_position - self.joint_pos_offset_tolerance
                         self.node.gamepad_feedback.send_feedback(intensity=1.0)
                     any_axis_active = True
 
@@ -230,11 +237,9 @@ class JointTrajectoryController(BaseController):
             self.is_joystick_idle = True
 
     def publish_joint_trajectory(
-        self, target_positions, publisher, joint_names=None, speed_percentage=1.0
+        self, target_positions, publisher, joint_names, speed_percentage=1.0
     ):
         """Publishes a joint trajectory message for the given positions using the provided publisher."""
-        if joint_names is None:
-            joint_names = list(self.node.joint_states.keys())
 
         if not joint_names:
             self.node.get_logger().error("No joint names available. Cannot publish trajectory.")

@@ -21,34 +21,25 @@
 # NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
+from dynaarm_extensions.duatic_helpers.duatic_robots_helper import DuaticRobotsHelper
+from dynaarm_extensions.duatic_helpers.duatic_jtc_helper import DuaticJTCHelper
+
 
 class BaseController:
     """Base class for all controllers, providing logging and common methods."""
 
-    def __init__(self, node):
+    def __init__(self, node, duatic_robots_helper: DuaticRobotsHelper):
         self.node = node
         self.log_printed = False  # Track whether the log was printed
-        self.arms_count = 0  # Count of arms, used for logging
+        self.needed_low_level_controllers = None
+        self.joint_pos_offset_tolerance = 0.1
 
-    def get_joint_states(self):
-        """Always return a list of joint state dicts, one per arm."""
-        joint_states = self.node.joint_states
-        if self.arms_count <= 1:
-            return [joint_states]  # Always a list, even for single arm
+        self.duatic_robots_helper = duatic_robots_helper
+        self.duatic_jtc_helper = DuaticJTCHelper(self.node)
 
-        # Multi-arm: split joint_states into self.arms_count chunks
-        joint_names = list(joint_states.keys())
-        values = list(joint_states.values())
-        chunk_size = len(joint_names) // self.arms_count
-        joint_states_per_arm = []
-        for i in range(self.arms_count):
-            start = i * chunk_size
-            end = (i + 1) * chunk_size
-            arm_joint_names = joint_names[start:end]
-            arm_joint_values = values[start:end]
-            arm_joint_dict = dict(zip(arm_joint_names, arm_joint_values))
-            joint_states_per_arm.append(arm_joint_dict)
-        return joint_states_per_arm
+    def get_low_level_controllers(self):
+        """Returns the name of the low-level controller this controller is based on."""
+        return self.needed_low_level_controllers
 
     def process_input(self, joy_msg):
         """Override this in child classes."""
@@ -57,3 +48,11 @@ class BaseController:
     def reset(self):
         """Reset controller state when switching back to this controller."""
         self.log_printed = False  # Reset logging state
+
+    def get_arm_from_topic(self, topic):
+        """Extract arm name from topic like '/joint_trajectory_controller_arm_left/joint_trajectory'"""
+        if "arm_left" in topic:
+            return "arm_left"
+        elif "arm_right" in topic:
+            return "arm_right"
+        return ""
