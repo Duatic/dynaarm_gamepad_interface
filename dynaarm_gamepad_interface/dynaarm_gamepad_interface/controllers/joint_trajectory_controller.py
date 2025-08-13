@@ -39,7 +39,7 @@ class JointTrajectoryController(BaseController):
         self.arms = self.duatic_robots_helper.get_component_names("arm")
         found_topics = self.duatic_jtc_helper.find_topics_for_controller(
             "joint_trajectory_controller", "joint_trajectory", self.arms
-        )        
+        )
         response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_positions = response[1]

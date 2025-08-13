@@ -35,33 +35,31 @@ class MecanumController(BaseController):
         self.node.get_logger().info("Initializing mecanum controller.")
 
         self.needed_low_level_controllers = ["mecanum_drive_controller"]
-        
+
         # Create publisher for mecanum drive
         self.twist_publisher = self.node.create_publisher(
-            TwistStamped, 
-            "/mecanum_drive_controller/reference", 
-            10
+            TwistStamped, "/mecanum_drive_controller/reference", 10
         )
-        
+
         # Get control parameters from config
         self.max_linear_vel = 0.5
         self.max_angular_vel = 0.5
-        
+
         # Acceleration/deceleration parameters
         self.max_linear_accel = 0.1  # m/s² 0.5
         self.max_angular_accel = 0.3  # rad/s² 1.0
-        
+
         # Current velocity state for acceleration limiting - ensure valid initialization
         self.current_linear_x = 0.0
         self.current_linear_y = 0.0
         self.current_angular_z = 0.0
-        
+
         # Time tracking for acceleration calculations
         self.last_time = self.node.get_clock().now()
-        
+
         # Controller state
         self.is_initialized = False
-        
+
         self.node.get_logger().info("Mecanum controller initialized")
 
     def _is_valid_float(self, value):
@@ -73,10 +71,10 @@ class MecanumController(BaseController):
         if not self._is_valid_float(value):
             return 0.0
         return max(min_val, min(max_val, value))
-    
+
     def reset(self):
         """Reset commanded positions to current joint states for all topics."""
-        self._send_zero_command()        
+        self._send_zero_command()
 
     def _apply_acceleration_limit(self, target_vel, current_vel, max_accel, dt):
         """Apply acceleration limiting to smooth velocity changes."""
@@ -87,14 +85,14 @@ class MecanumController(BaseController):
             current_vel = 0.0
         if not self._is_valid_float(dt) or dt <= 0:
             return current_vel
-        
+
         vel_diff = target_vel - current_vel
         max_vel_change = max_accel * dt
-        
+
         # Additional safety check
         if not self._is_valid_float(vel_diff) or not self._is_valid_float(max_vel_change):
             return 0.0
-        
+
         if abs(vel_diff) <= max_vel_change:
             return target_vel
         else:
@@ -104,12 +102,12 @@ class MecanumController(BaseController):
 
     def process_input(self, joy_msg):
         """Process joystick input and convert to mecanum drive commands."""
-        
+
         # Calculate time delta
         current_time = self.node.get_clock().now()
         dt = (current_time - self.last_time).nanoseconds / 1e9
         self.last_time = current_time
-        
+
         # Handle first call initialization
         if not self.is_initialized:
             self.is_initialized = True
@@ -117,27 +115,27 @@ class MecanumController(BaseController):
             # Send zero command on first call
             self._send_zero_command()
             return
-        
+
         # Skip if time delta is too small or too large
         if dt <= 0.001 or dt > 0.1:
             dt = 0.02  # Default to 50Hz
-        
+
         # Validate joy_msg and axes
-        if not joy_msg or not hasattr(joy_msg, 'axes') or len(joy_msg.axes) < 3:
+        if not joy_msg or not hasattr(joy_msg, "axes") or len(joy_msg.axes) < 3:
             self.node.get_logger().warn("Invalid joystick message received")
             self._send_zero_command()
             return
-        
+
         # Get joystick axes (normalized -1.0 to 1.0) with validation
         try:
-            left_stick_x = self._clamp_value(joy_msg.axes[0])   # Left stick X - strafe left/right
-            left_stick_y = self._clamp_value(joy_msg.axes[1])   # Left stick Y - forward/backward
+            left_stick_x = self._clamp_value(joy_msg.axes[0])  # Left stick X - strafe left/right
+            left_stick_y = self._clamp_value(joy_msg.axes[1])  # Left stick Y - forward/backward
             right_stick_x = self._clamp_value(joy_msg.axes[2])  # Right stick X - rotation
         except (IndexError, TypeError) as e:
             self.node.get_logger().warn(f"Error reading joystick axes: {e}")
             self._send_zero_command()
             return
-        
+
         # Apply deadzone to prevent drift
         deadzone = 0.25
         if abs(left_stick_x) < deadzone:
@@ -146,12 +144,12 @@ class MecanumController(BaseController):
             left_stick_y = 0.0
         if abs(right_stick_x) < deadzone:
             right_stick_x = 0.0
-        
+
         # Calculate target velocities
         target_linear_x = left_stick_y * self.max_linear_vel
         target_linear_y = left_stick_x * self.max_linear_vel
         target_angular_z = right_stick_x * self.max_angular_vel
-        
+
         # Apply acceleration limiting with extra safety
         self.current_linear_x = self._apply_acceleration_limit(
             target_linear_x, self.current_linear_x, self.max_linear_accel, dt
@@ -162,17 +160,21 @@ class MecanumController(BaseController):
         self.current_angular_z = self._apply_acceleration_limit(
             target_angular_z, self.current_angular_z, self.max_angular_accel, dt
         )
-        
+
         # Final validation of calculated values
-        if not (self._is_valid_float(self.current_linear_x) and 
-                self._is_valid_float(self.current_linear_y) and 
-                self._is_valid_float(self.current_angular_z)):
+        if not (
+            self._is_valid_float(self.current_linear_x)
+            and self._is_valid_float(self.current_linear_y)
+            and self._is_valid_float(self.current_angular_z)
+        ):
             self.node.get_logger().warn("Invalid velocity values calculated, sending zero command")
             self._send_zero_command()
             return
-        
+
         # Create and send twist message
-        self._send_twist_command(self.current_linear_x, self.current_linear_y, self.current_angular_z)
+        self._send_twist_command(
+            self.current_linear_x, self.current_linear_y, self.current_angular_z
+        )
 
     def _send_zero_command(self):
         """Send a zero velocity command to stop the robot safely."""
@@ -187,15 +189,15 @@ class MecanumController(BaseController):
         twist_msg = TwistStamped()
         twist_msg.header.stamp = self.node.get_clock().now().to_msg()
         twist_msg.header.frame_id = "base_link"
-        
+
         # Map joystick inputs to robot velocities
         twist_msg.twist.linear.x = linear_x
         twist_msg.twist.linear.y = linear_y
         twist_msg.twist.linear.z = 0.0
-        
+
         twist_msg.twist.angular.x = 0.0
         twist_msg.twist.angular.y = 0.0
         twist_msg.twist.angular.z = angular_z
-        
+
         # Publish the command
         self.twist_publisher.publish(twist_msg)

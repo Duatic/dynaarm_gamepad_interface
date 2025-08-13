@@ -111,7 +111,7 @@ class GamepadInterface(Node):
 
         if msg is None:
             return
-        
+
         # Check deadman switch and track state changes
         current_deadman_state = msg.buttons[self.button_mapping["dead_man_switch"]]
         deadman_just_released = self.deadman_active and not current_deadman_state
@@ -120,18 +120,18 @@ class GamepadInterface(Node):
         self.deadman_active = current_deadman_state
 
         if not self.deadman_active:
-            
+
             # If deadman is not active, stop any move commands that were previously active
             if self.move_command_active:
                 self.move_home_pub.publish(Bool(data=False))
                 self.move_sleep_pub.publish(Bool(data=False))
                 self.move_command_active = False
-            
+
             # Reset controller only once when deadman is just released
             if deadman_just_released:
                 current_controller = self.controller_manager.get_current_controller()
                 if current_controller is not None:
-                    current_controller.reset()                                    
+                    current_controller.reset()
 
             return
 

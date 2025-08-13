@@ -33,6 +33,7 @@ from dynaarm_gamepad_interface.controllers.cartesian_controller import Cartesian
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
 from dynaarm_gamepad_interface.controllers.mecanum_controller import MecanumController
 
+
 class ControllerManager:
     """Handle controllers"""
 
@@ -63,11 +64,11 @@ class ControllerManager:
     def _filter_available_controllers(self):
         """Check which controllers are available and filter out unavailable ones."""
         self.node.get_logger().info("Checking controller availability...")
-        
+
         # Get all available low-level controllers from the system
         self.duatic_controller_helper.wait_for_controller_data()
         all_system_controllers = self.duatic_controller_helper.get_all_controllers()
-        
+
         if not all_system_controllers:
             self.node.get_logger().warn("No controllers found in the system!")
             return
@@ -79,23 +80,24 @@ class ControllerManager:
 
         for idx, controller in self.all_potential_controllers.items():
             controller_name = controller.__class__.__name__
-            
-            if hasattr(controller, 'get_low_level_controllers'):
+
+            if hasattr(controller, "get_low_level_controllers"):
                 required_controllers = controller.get_low_level_controllers()
-                
+
                 # Check if all required low-level controllers are available
                 all_required_available = True
                 missing_controllers = []
-                
+
                 for required in required_controllers:
                     # Check if any system controller contains the required controller name
                     controller_found = any(
-                        required in system_controller for system_controller in all_system_controllers
+                        required in system_controller
+                        for system_controller in all_system_controllers
                     )
                     if not controller_found:
                         all_required_available = False
                         missing_controllers.append(required)
-                
+
                 if all_required_available:
                     available_controllers[new_index] = controller
                     self.node.get_logger().info(
@@ -112,11 +114,15 @@ class ControllerManager:
                 )
 
         self.all_high_level_controllers = available_controllers
-        
+
         if not self.all_high_level_controllers:
-            self.node.get_logger().error("No controllers are available! Check your controller configuration.")
+            self.node.get_logger().error(
+                "No controllers are available! Check your controller configuration."
+            )
         else:
-            controller_names = [c.__class__.__name__ for c in self.all_high_level_controllers.values()]
+            controller_names = [
+                c.__class__.__name__ for c in self.all_high_level_controllers.values()
+            ]
             self.node.get_logger().info(f"Available high-level controllers: {controller_names}")
 
     def get_current_controller(self):
@@ -221,10 +227,10 @@ class ControllerManager:
 
         # Get the current index in the available controllers
         current_idx = self.active_high_level_controller_index
-        
+
         # Get list of available indices and find next one
         available_indices = sorted(self.all_high_level_controllers.keys())
-        
+
         if current_idx not in available_indices:
             # If current index is invalid, start with first available
             next_high_level_controller_index = available_indices[0]
