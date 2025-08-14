@@ -37,6 +37,8 @@ class CartesianController(BaseController):
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
 
+        self.node.get_logger().info("Initializing cartesian controller.")
+
         self.ee_frame = "flange"
         self.current_pose = None
         self.scale = 0.05
@@ -51,6 +53,7 @@ class CartesianController(BaseController):
         found_topics = self.duatic_jtc_helper.find_topics_for_controller(
             "dynaarm_pose_controller", "target_frame", self.arms
         )
+
         response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
         self.topic_to_joint_names = response[0]
         self.topic_to_commanded_poses = response[1]

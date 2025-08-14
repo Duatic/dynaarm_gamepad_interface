@@ -49,6 +49,8 @@ class GamepadInterface(Node):
         self.joy_lock = threading.Lock()
         self.last_menu_button_state = 0
         self.move_command_active = False  # Track if move_home or move_sleep was executed
+        self.deadman_active = False  # Track deadman switch state
+        self.last_deadman_state = False  # Track previous deadman state for edge detection
 
         self.declare_parameter("mirror", mirror)
 
@@ -110,19 +112,27 @@ class GamepadInterface(Node):
         if msg is None:
             return
 
-        # Check deadman switch first
-        deadman_active = msg.buttons[self.button_mapping["dead_man_switch"]]
+        # Check deadman switch and track state changes
+        current_deadman_state = msg.buttons[self.button_mapping["dead_man_switch"]]
+        deadman_just_released = self.deadman_active and not current_deadman_state
 
-        if not deadman_active:
+        # Update deadman state
+        self.deadman_active = current_deadman_state
+
+        if not self.deadman_active:
+
             # If deadman is not active, stop any move commands that were previously active
             if self.move_command_active:
                 self.move_home_pub.publish(Bool(data=False))
                 self.move_sleep_pub.publish(Bool(data=False))
                 self.move_command_active = False
-                # Reset current controller to get fresh joint values
+
+            # Reset controller only once when deadman is just released
+            if deadman_just_released:
                 current_controller = self.controller_manager.get_current_controller()
                 if current_controller is not None:
                     current_controller.reset()
+
             return
 
         # Deadman switch is active, check for move commands

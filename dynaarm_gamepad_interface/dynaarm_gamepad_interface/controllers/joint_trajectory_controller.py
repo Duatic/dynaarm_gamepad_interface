@@ -32,6 +32,7 @@ class JointTrajectoryController(BaseController):
 
     def __init__(self, node, duatic_robots_helper):
         super().__init__(node, duatic_robots_helper)
+        self.node.get_logger().info("Initializing joint trajectory controller.")
 
         self.needed_low_level_controllers = ["joint_trajectory_controller"]
 
