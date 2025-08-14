@@ -41,13 +41,13 @@ class MecanumController(BaseController):
             TwistStamped, "/mecanum_drive_controller/reference", 10
         )
 
-        # Get control parameters from config
-        self.max_linear_vel = 0.5
-        self.max_angular_vel = 0.5
+        # Get control parameters from ROS parameters
+        self.max_linear_vel = self.node.declare_parameter("max_linear_vel", 0.5).value
+        self.max_angular_vel = self.node.declare_parameter("max_angular_vel", 0.5).value
 
         # Acceleration/deceleration parameters
-        self.max_linear_accel = 0.1  # m/s² 0.5
-        self.max_angular_accel = 0.3  # rad/s² 1.0
+        self.max_linear_accel = self.node.declare_parameter("max_linear_accel", 0.1).value  # m/s²
+        self.max_angular_accel = self.node.declare_parameter("max_angular_accel", 0.3).value  # rad/s²
 
         # Current velocity state for acceleration limiting - ensure valid initialization
         self.current_linear_x = 0.0
