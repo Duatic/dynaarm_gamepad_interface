@@ -47,7 +47,9 @@ class MecanumController(BaseController):
 
         # Acceleration/deceleration parameters
         self.max_linear_accel = self.node.declare_parameter("max_linear_accel", 0.1).value  # m/s²
-        self.max_angular_accel = self.node.declare_parameter("max_angular_accel", 0.3).value  # rad/s²
+        self.max_angular_accel = self.node.declare_parameter(
+            "max_angular_accel", 0.3
+        ).value  # rad/s²
 
         # Deadzone for joystick input
         self.deadzone = self.node.declare_parameter("deadzone", 0.25).value
@@ -134,7 +136,9 @@ class MecanumController(BaseController):
             return
 
         if len(joy_msg.axes) < 3:
-            self.node.get_logger().warn(f"Joystick message has insufficient axes count: {len(joy_msg.axes)} (expected at least 3)")
+            self.node.get_logger().warn(
+                f"Joystick message has insufficient axes count: {len(joy_msg.axes)} (expected at least 3)"
+            )
             self._send_zero_command()
             return
 
