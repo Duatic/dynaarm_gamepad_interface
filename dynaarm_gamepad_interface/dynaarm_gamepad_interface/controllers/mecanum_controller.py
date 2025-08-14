@@ -49,6 +49,9 @@ class MecanumController(BaseController):
         self.max_linear_accel = self.node.declare_parameter("max_linear_accel", 0.1).value  # m/s²
         self.max_angular_accel = self.node.declare_parameter("max_angular_accel", 0.3).value  # rad/s²
 
+        # Deadzone for joystick input
+        self.deadzone = self.node.declare_parameter("deadzone", 0.25).value
+
         # Current velocity state for acceleration limiting - ensure valid initialization
         self.current_linear_x = 0.0
         self.current_linear_y = 0.0
@@ -120,9 +123,18 @@ class MecanumController(BaseController):
         if dt <= 0.001 or dt > 0.1:
             dt = 0.02  # Default to 50Hz
 
-        # Validate joy_msg and axes
-        if not joy_msg or not hasattr(joy_msg, "axes") or len(joy_msg.axes) < 3:
-            self.node.get_logger().warn("Invalid joystick message received")
+        if not joy_msg:
+            self.node.get_logger().warn("Joystick message missing (joy_msg is None or empty)")
+            self._send_zero_command()
+            return
+
+        if not hasattr(joy_msg, "axes"):
+            self.node.get_logger().warn("Joystick message missing 'axes' attribute")
+            self._send_zero_command()
+            return
+
+        if len(joy_msg.axes) < 3:
+            self.node.get_logger().warn(f"Joystick message has insufficient axes count: {len(joy_msg.axes)} (expected at least 3)")
             self._send_zero_command()
             return
 
@@ -137,12 +149,11 @@ class MecanumController(BaseController):
             return
 
         # Apply deadzone to prevent drift
-        deadzone = 0.25
-        if abs(left_stick_x) < deadzone:
+        if abs(left_stick_x) < self.deadzone:
             left_stick_x = 0.0
-        if abs(left_stick_y) < deadzone:
+        if abs(left_stick_y) < self.deadzone:
             left_stick_y = 0.0
-        if abs(right_stick_x) < deadzone:
+        if abs(right_stick_x) < self.deadzone:
             right_stick_x = 0.0
 
         # Calculate target velocities
