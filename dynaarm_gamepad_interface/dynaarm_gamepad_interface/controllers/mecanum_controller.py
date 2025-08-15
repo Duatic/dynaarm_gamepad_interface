@@ -42,17 +42,11 @@ class MecanumController(BaseController):
         )
 
         # Get control parameters from ROS parameters
-        self.max_linear_vel = self.node.declare_parameter("max_linear_vel", 0.5).value
-        self.max_angular_vel = self.node.declare_parameter("max_angular_vel", 0.5).value
-
-        # Acceleration/deceleration parameters
-        self.max_linear_accel = self.node.declare_parameter("max_linear_accel", 0.1).value  # m/s²
-        self.max_angular_accel = self.node.declare_parameter(
-            "max_angular_accel", 0.3
-        ).value  # rad/s²
+        self.max_vel = self.node.declare_parameter("max_vel", 0.5).value
+        self.max_accel = self.node.declare_parameter("max_accel", 0.1).value  # m/s²        
 
         # Deadzone for joystick input
-        self.deadzone = self.node.declare_parameter("deadzone", 0.25).value
+        self.deadzone = self.node.declare_parameter("deadzone", 0.4).value
 
         # Current velocity state for acceleration limiting - ensure valid initialization
         self.current_linear_x = 0.0
@@ -161,19 +155,19 @@ class MecanumController(BaseController):
             right_stick_x = 0.0
 
         # Calculate target velocities
-        target_linear_x = left_stick_y * self.max_linear_vel
-        target_linear_y = left_stick_x * self.max_linear_vel
-        target_angular_z = right_stick_x * self.max_angular_vel
+        target_linear_x = left_stick_y * self.max_vel
+        target_linear_y = left_stick_x * self.max_vel
+        target_angular_z = right_stick_x * self.max_vel
 
         # Apply acceleration limiting with extra safety
         self.current_linear_x = self._apply_acceleration_limit(
-            target_linear_x, self.current_linear_x, self.max_linear_accel, dt
+            target_linear_x, self.current_linear_x, self.max_accel, dt
         )
         self.current_linear_y = self._apply_acceleration_limit(
-            target_linear_y, self.current_linear_y, self.max_linear_accel, dt
+            target_linear_y, self.current_linear_y, self.max_accel, dt
         )
         self.current_angular_z = self._apply_acceleration_limit(
-            target_angular_z, self.current_angular_z, self.max_angular_accel, dt
+            target_angular_z, self.current_angular_z, self.max_accel, dt
         )
 
         # Final validation of calculated values
