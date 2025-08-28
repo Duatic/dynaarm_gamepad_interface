@@ -51,8 +51,8 @@ class ControllerManager:
         self.all_potential_controllers = {
             0: FreedriveController(self.node, duatic_robots_helper),
             1: JointTrajectoryController(self.node, duatic_robots_helper),
-            2: CartesianController(self.node, duatic_robots_helper),
-            3: MecanumController(self.node, duatic_robots_helper),
+            # 2: CartesianController(self.node, duatic_robots_helper),
+            2: MecanumController(self.node, duatic_robots_helper),
         }
 
         # Check which controllers are actually available and create filtered list
