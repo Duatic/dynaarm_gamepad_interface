@@ -45,13 +45,12 @@ class CartesianController(BaseController):
         self.mirror = self.node.get_parameter("mirror").get_parameter_value().bool_value
 
         self.needed_low_level_controllers = [
-            "joint_trajectory_controller",
-            "dynaarm_pose_controller",
+            "cartesian_pose_controller",
         ]
 
         self.arms = self.duatic_robots_helper.get_component_names("arm")
         found_topics = self.duatic_jtc_helper.find_topics_for_controller(
-            "dynaarm_pose_controller", "target_frame", self.arms
+            "cartesian_pose_controller", "target_pose", self.arms
         )
 
         response = self.duatic_jtc_helper.process_topics_and_extract_joint_names(found_topics)
