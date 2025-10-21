@@ -32,6 +32,7 @@ from dynaarm_gamepad_interface.controllers.joint_trajectory_controller import (
 from dynaarm_gamepad_interface.controllers.cartesian_controller import CartesianController
 from dynaarm_gamepad_interface.controllers.freedrive_controller import FreedriveController
 from dynaarm_gamepad_interface.controllers.mecanum_controller import MecanumController
+from dynaarm_gamepad_interface.controllers.gripper_controller import GripperController
 
 
 class ControllerManager:
@@ -51,9 +52,11 @@ class ControllerManager:
         self.all_potential_controllers = {
             0: FreedriveController(self.node, duatic_robots_helper),
             1: JointTrajectoryController(self.node, duatic_robots_helper),
-            2: CartesianController(self.node, duatic_robots_helper),
-            3: MecanumController(self.node, duatic_robots_helper),
+            #2: CartesianController(self.node, duatic_robots_helper),
+            2: MecanumController(self.node, duatic_robots_helper),
         }
+
+        self.gripper_controller = GripperController(self.node, duatic_robots_helper)
 
         # Check which controllers are actually available and create filtered list
         self.all_high_level_controllers = {}

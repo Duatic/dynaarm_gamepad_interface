@@ -42,8 +42,8 @@ class MecanumController(BaseController):
         )
 
         # Get control parameters from ROS parameters
-        self.max_vel = self.node.declare_parameter("max_vel", 0.5).value
-        self.max_accel = self.node.declare_parameter("max_accel", 0.1).value  # m/s²
+        self.max_vel = self.node.declare_parameter("max_vel", 0.8).value
+        self.max_accel = self.node.declare_parameter("max_accel", 0.2).value  # m/s²
 
         # Deadzone for joystick input
         self.deadzone = self.node.declare_parameter("deadzone", 0.4).value
