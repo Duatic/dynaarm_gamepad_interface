@@ -174,7 +174,7 @@ class GamepadInterface(Node):
         if self.last_menu_button_state:
             # TODO Hold current position?
             return
-        
+
         self.controller_manager.gripper_controller.process_input(msg)
 
         # Now get the current active controller from the controller manager:

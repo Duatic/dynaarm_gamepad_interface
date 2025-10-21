@@ -26,6 +26,7 @@ from dynaarm_gamepad_interface.controllers.base_controller import BaseController
 from rclpy.qos import QoSProfile
 from std_msgs.msg import Float64MultiArray
 
+
 class GripperController(BaseController):
     """Handles gripper control."""
 
@@ -33,7 +34,7 @@ class GripperController(BaseController):
         super().__init__(node, duatic_robots_helper)
 
         self.needed_low_level_controllers = ["gripper_controller"]
-        
+
         # Gripper publisher setup
         self.gripper_topic = "/gripper_controller/commands"
         self.gripper_pub = None
@@ -48,7 +49,9 @@ class GripperController(BaseController):
         topics = [t[0] for t in self.node.get_topic_names_and_types()]
         if self.gripper_topic in topics:
             qos_profile = QoSProfile(depth=1)
-            self.gripper_pub = self.node.create_publisher(Float64MultiArray, self.gripper_topic, qos_profile)
+            self.gripper_pub = self.node.create_publisher(
+                Float64MultiArray, self.gripper_topic, qos_profile
+            )
             self.node.get_logger().info("Gripper publisher created on %s" % self.gripper_topic)
         else:
             self.node.get_logger().warn("Gripper topic %s not available." % self.gripper_topic)
