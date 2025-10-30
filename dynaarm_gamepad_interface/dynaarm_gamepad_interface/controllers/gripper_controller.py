@@ -36,7 +36,7 @@ class GripperController(BaseController):
         self.needed_low_level_controllers = ["gripper_controller"]
 
         # Gripper publisher setup
-        self.gripper_topic = "/gripper_controller/commands"
+        self.gripper_topic_suffix = "gripper_controller/commands"
         self.gripper_pub = None
         self._setup_gripper_publisher()
 
@@ -45,16 +45,27 @@ class GripperController(BaseController):
         self._last_button_state = False
 
     def _setup_gripper_publisher(self):
-        # Check if topic exists and create publisher if so
-        topics = [t[0] for t in self.node.get_topic_names_and_types()]
-        if self.gripper_topic in topics:
+        # Get node namespace
+        ns = self.node.get_namespace().rstrip("/")
+        all_topics = [t[0] for t in self.node.get_topic_names_and_types()]
+
+        # Look for namespaced topic
+        self.gripper_topic = None
+        for topic in all_topics:
+            if topic.endswith(self.gripper_topic_suffix):
+                self.gripper_topic = topic
+                break
+
+        if self.gripper_topic:
             qos_profile = QoSProfile(depth=1)
             self.gripper_pub = self.node.create_publisher(
                 Float64MultiArray, self.gripper_topic, qos_profile
             )
-            self.node.get_logger().info("Gripper publisher created on %s" % self.gripper_topic)
+            self.node.get_logger().info(f"Gripper publisher created on {self.gripper_topic}")
         else:
-            self.node.get_logger().warn("Gripper topic %s not available." % self.gripper_topic)
+            self.node.get_logger().warn(
+                f"Gripper topic {self.gripper_topic_suffix} not available in namespace {ns}."
+            )
 
     def send_gripper_command(self, position: float):
         """Send a command to the gripper if publisher is available."""

@@ -55,11 +55,11 @@ class GamepadInterface(Node):
         self.declare_parameter("mirror", mirror)
 
         # Publishers
-        self.move_home_pub = self.create_publisher(Bool, "/move_home", 10)
-        self.move_sleep_pub = self.create_publisher(Bool, "/move_sleep", 10)
+        self.move_home_pub = self.create_publisher(Bool, "move_home", 10)
+        self.move_sleep_pub = self.create_publisher(Bool, "move_sleep", 10)
 
         # Subscribers
-        self.create_subscription(Joy, "/joy", self.joy_callback, 10)
+        self.create_subscription(Joy, "joy", self.joy_callback, 10)
 
         # Load gamepad mappings from YAML
         config_path = os.path.join(
@@ -192,9 +192,9 @@ def main(args=None):
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--mirror", action="store_true", help="Mirror arm movements")
-    parsed_args = parser.parse_args()
+    parsed_args, unknown = parser.parse_known_args()  # ← ignore ROS args
 
-    rclpy.init(args=args)
+    rclpy.init(args=unknown)  # ← pass remaining args to rclpy
     node = GamepadInterface(mirror=parsed_args.mirror)
 
     try:
