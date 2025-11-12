@@ -57,16 +57,32 @@ class GamepadInterface(Node):
         self.bag_future = None
         self.last_bag_button_state = 0
 
+        self.grasp_bag_future = None
+        self.last_grasp_button_state = 0
+
+        self.placing_future = None
+        self.last_placing_button_state = 0
+
         self.declare_parameter("mirror", mirror)
 
         # Publishers
         self.move_home_pub = self.create_publisher(Bool, "move_home", 10)
         self.move_sleep_pub = self.create_publisher(Bool, "move_sleep", 10)
         self.bag_detection_cli = self.create_client(Trigger, "/start_bag_detection")
+        self.bag_grasping_cli = self.create_client(Trigger, "/start_bag_grasping")
+        self.bag_placing_cli = self.create_client(Trigger, "/start_bag_placing")
 
         while not self.bag_detection_cli.wait_for_service(timeout_sec=2.0):
             self.get_logger().info("Waiting for /start_bag_detection service...")
         self.req = Trigger.Request()
+
+        while not self.bag_grasping_cli.wait_for_service(timeout_sec=2.0):
+            self.get_logger().info("Waiting for /start_bag_grasping service...")
+        self.grasp_req = Trigger.Request()
+
+        while not self.bag_placing_cli.wait_for_service(timeout_sec=2.0):
+            self.get_logger().info("Waiting for /start_bag_placing service...")
+        self.placing_req = Trigger.Request()
 
         # Subscribers
         self.create_subscription(Joy, "joy", self.joy_callback, 10)
@@ -122,6 +138,20 @@ class GamepadInterface(Node):
         self.get_logger().info("Starting bag detection (async)...")
         self.bag_future = self.bag_detection_cli.call_async(self.req)
 
+    def start_bag_grasping_async(self):
+        if self.grasp_bag_future is not None and not self.grasp_bag_future.done():
+            self.get_logger().info("Bag grasping already running; ignoring.")
+            return
+        self.get_logger().info("Starting bag grasping (async)...")
+        self.grasp_bag_future = self.bag_grasping_cli.call_async(self.req)
+
+    def start_bag_placing_async(self):
+        if self.placing_future is not None and not self.placing_future.done():
+            self.get_logger().info("Bag placing already running; ignoring.")
+            return
+        self.get_logger().info("Starting bag placing (async)...")
+        self.placing_future = self.bag_placing_cli.call_async(self.placing_req)
+
     def process_joy_input(self):
         """Process latest joystick input."""
         with self.joy_lock:
@@ -146,19 +176,20 @@ class GamepadInterface(Node):
                     current_controller.reset()
             return
 
-        # Deadman switch is active, check for move commands
-        bag_button = msg.buttons[self.button_mapping["bag_detection"]]
-        move_sleep_pressed = msg.buttons[self.button_mapping["move_sleep"]]
-
         bag_button = msg.buttons[self.button_mapping["bag_detection"]]
         if bag_button == 1 and self.last_bag_button_state == 0:
             self.start_bag_detection_async()
         self.last_bag_button_state = bag_button
-            
-        if move_sleep_pressed:
-            self.move_sleep_pub.publish(Bool(data=True))
-            self.move_command_active = True
-            return
+
+        grasp_button = msg.buttons[self.button_mapping["bag_grasping"]]
+        if grasp_button == 1 and self.last_grasp_button_state == 0:
+            self.start_bag_grasping_async()
+        self.last_grasp_button_state = grasp_button
+
+        placing_button = msg.buttons[self.button_mapping["bag_placing"]]
+        if placing_button == 1 and self.last_placing_button_state == 0:
+            self.start_bag_placing_async()
+        self.last_placing_button_state = placing_button
 
         # Use dynamically loaded menu button index
         switch_controller_index = self.button_mapping["switch_controller"]
@@ -176,8 +207,6 @@ class GamepadInterface(Node):
         if self.last_menu_button_state:
             # TODO Hold current position?
             return
-
-        self.controller_manager.gripper_controller.process_input(msg)
 
         # Now get the current active controller from the controller manager:
         current_controller = self.controller_manager.get_current_controller()
