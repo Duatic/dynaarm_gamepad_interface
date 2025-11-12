@@ -33,6 +33,7 @@ from rclpy.node import Node
 
 from std_msgs.msg import Bool
 from sensor_msgs.msg import Joy
+from std_srvs.srv import Trigger
 
 from dynaarm_gamepad_interface.controller_manager import ControllerManager
 from dynaarm_gamepad_interface.utils.gamepad_feedback import GamepadFeedback
@@ -49,14 +50,23 @@ class GamepadInterface(Node):
         self.joy_lock = threading.Lock()
         self.last_menu_button_state = 0
         self.move_command_active = False  # Track if move_home or move_sleep was executed
+        self.bag_detection_active = False
         self.deadman_active = False  # Track deadman switch state
         self.last_deadman_state = False  # Track previous deadman state for edge detection
+
+        self.bag_future = None
+        self.last_bag_button_state = 0
 
         self.declare_parameter("mirror", mirror)
 
         # Publishers
         self.move_home_pub = self.create_publisher(Bool, "move_home", 10)
         self.move_sleep_pub = self.create_publisher(Bool, "move_sleep", 10)
+        self.bag_detection_cli = self.create_client(Trigger, "/start_bag_detection")
+
+        while not self.bag_detection_cli.wait_for_service(timeout_sec=2.0):
+            self.get_logger().info("Waiting for /start_bag_detection service...")
+        self.req = Trigger.Request()
 
         # Subscribers
         self.create_subscription(Joy, "joy", self.joy_callback, 10)
@@ -104,6 +114,14 @@ class GamepadInterface(Node):
         with self.joy_lock:
             self.latest_joy_msg = msg
 
+    # --- replace send_request_bag_detection with a non-blocking version ---
+    def start_bag_detection_async(self):
+        if self.bag_future is not None and not self.bag_future.done():
+            self.get_logger().info("Bag detection already running; ignoring.")
+            return
+        self.get_logger().info("Starting bag detection (async)...")
+        self.bag_future = self.bag_detection_cli.call_async(self.req)
+
     def process_joy_input(self):
         """Process latest joystick input."""
         with self.joy_lock:
@@ -121,42 +139,26 @@ class GamepadInterface(Node):
 
         if not self.deadman_active:
 
-            # If deadman is not active, stop any move commands that were previously active
-            if self.move_command_active:
-                self.move_home_pub.publish(Bool(data=False))
-                self.move_sleep_pub.publish(Bool(data=False))
-                self.move_command_active = False
-
             # Reset controller only once when deadman is just released
             if deadman_just_released:
                 current_controller = self.controller_manager.get_current_controller()
                 if current_controller is not None:
                     current_controller.reset()
-
             return
 
         # Deadman switch is active, check for move commands
-        move_home_pressed = msg.buttons[self.button_mapping["move_home"]]
+        bag_button = msg.buttons[self.button_mapping["bag_detection"]]
         move_sleep_pressed = msg.buttons[self.button_mapping["move_sleep"]]
 
-        if move_home_pressed:
-            self.move_home_pub.publish(Bool(data=True))
-            self.move_command_active = True
-            return
-        elif move_sleep_pressed:
+        bag_button = msg.buttons[self.button_mapping["bag_detection"]]
+        if bag_button == 1 and self.last_bag_button_state == 0:
+            self.start_bag_detection_async()
+        self.last_bag_button_state = bag_button
+            
+        if move_sleep_pressed:
             self.move_sleep_pub.publish(Bool(data=True))
             self.move_command_active = True
             return
-        else:
-            # No move commands pressed, stop them if they were active
-            if self.move_command_active:
-                self.move_home_pub.publish(Bool(data=False))
-                self.move_sleep_pub.publish(Bool(data=False))
-                self.move_command_active = False
-                # Reset current controller after move commands are stopped
-                current_controller = self.controller_manager.get_current_controller()
-                if current_controller is not None:
-                    current_controller.reset()
 
         # Use dynamically loaded menu button index
         switch_controller_index = self.button_mapping["switch_controller"]
